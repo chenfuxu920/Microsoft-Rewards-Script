@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-export PLAYWRIGHT_BROWSERS_PATH=0
 export TZ="${TZ:-UTC}"
 
 cd /usr/src/microsoft-rewards-script
+
+# Redirect all output to log file to avoid duplication in Docker logs
+# log-forwarder.sh will handle streaming this to Docker stdout
+exec >> /var/log/microsoft-rewards.log 2>&1
 
 LOCKFILE=/tmp/run_daily.lock
 
@@ -145,10 +148,10 @@ fi
 
 # 启动实际脚本
 echo "[$(date)] [run_daily.sh] 开始脚本..."
-if npm start 2>&1 | tee -a /var/log/microsoft-rewards.log; then
+if npm start; then
     echo "[$(date)] [run_daily.sh] 脚本成功完成。"
 else
-    echo "[$(date)] [run_daily.sh] 错误: 脚本失败！" >&2
+    echo "[$(date)] [run_daily.sh] 错误: 脚本失败！"
 fi
 
 echo "[$(date)] [run_daily.sh] 脚本完成"

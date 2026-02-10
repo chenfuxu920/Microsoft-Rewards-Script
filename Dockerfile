@@ -1,17 +1,27 @@
 ###############################################################################
 # Stage 1: Builder
 ###############################################################################
-FROM m.daocloud.io/docker.io/library/node:24-slim AS builder
+FROM node:24-bullseye-slim AS builder
 
 WORKDIR /usr/src/microsoft-rewards-script
 
-ENV PLAYWRIGHT_BROWSERS_PATH=0
+# 配置 apt 镜像源为 USTC
+RUN sed -i 's/deb.debian.org/mirrors.ustc.edu.cn/g' /etc/apt/sources.list \
+    && sed -i 's/security.debian.org/mirrors.ustc.edu.cn/g' /etc/apt/sources.list \
+    && npm config set registry https://registry.npmmirror.com/ \
+    && npm config set fetch-retries 10 \
+    && npm config set fetch-retry-mintimeout 60000 \
+    && npm config set fetch-retry-maxtimeout 300000 \
+    && npm config set progress false
+
+ENV PLAYWRIGHT_BROWSERS_PATH=/usr/src/microsoft-rewards-script/pw-browsers \
+    PATCHRIGHT_BROWSERS_PATH=/usr/src/microsoft-rewards-script/pw-browsers
 
 # Copy package files
 COPY package.json package-lock.json tsconfig.json ./
 
 # Install all dependencies required to build the script
-RUN npm ci --ignore-scripts
+RUN npm install --ignore-scripts --no-audit --no-fund --loglevel verbose
 
 # Copy source and build
 COPY . .
@@ -19,29 +29,33 @@ RUN npm run build
 
 # Remove build dependencies, and reinstall only runtime dependencies
 RUN rm -rf node_modules \
-    && npm ci --omit=dev --ignore-scripts \
+    && npm install --omit=dev --ignore-scripts --no-audit --no-fund --loglevel verbose \
     && npm cache clean --force
 
 # Install Chromium Headless Shell, and cleanup
-RUN npx patchright install --with-deps --only-shell chromium \
+RUN npx patchright install --only-shell chromium \
     && rm -rf /root/.cache /tmp/* /var/tmp/*
 
 ###############################################################################
 # Stage 2: Runtime
 ###############################################################################
-FROM m.daocloud.io/docker.io/library/node:24-slim AS runtime
+FROM node:24-bullseye-slim AS runtime
 
 WORKDIR /usr/src/microsoft-rewards-script
 
 # Set production environment variables
 ENV NODE_ENV=production \
     TZ=UTC \
-    PLAYWRIGHT_BROWSERS_PATH=0 \
+    PLAYWRIGHT_BROWSERS_PATH=/usr/src/microsoft-rewards-script/pw-browsers \
+    PATCHRIGHT_BROWSERS_PATH=/usr/src/microsoft-rewards-script/pw-browsers \
     FORCE_HEADLESS=1
 
 # Install minimal system libraries required for Chromium headless to run
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN sed -i 's/deb.debian.org/mirrors.ustc.edu.cn/g' /etc/apt/sources.list \
+    && sed -i 's/security.debian.org/mirrors.ustc.edu.cn/g' /etc/apt/sources.list \
+    && apt-get update && apt-get install -y --no-install-recommends --fix-missing \
     cron \
+    procps \
     gettext-base \
     tzdata \
     ca-certificates \
@@ -53,12 +67,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libnspr4 \
     libnss3 \
     libasound2 \
-    libflac12 \
+    libflac8 \
     libatk1.0-0 \
     libatspi2.0-0 \
     libdrm2 \
     libgbm1 \
-    libdav1d6 \
+    libdav1d4 \
     libx11-6 \
     libx11-xcb1 \
     libxcomposite1 \
@@ -78,6 +92,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /usr/src/microsoft-rewards-script/dist ./dist
 COPY --from=builder /usr/src/microsoft-rewards-script/package*.json ./
 COPY --from=builder /usr/src/microsoft-rewards-script/node_modules ./node_modules
+COPY --from=builder /usr/src/microsoft-rewards-script/pw-browsers ./pw-browsers
 
 # Copy runtime scripts with proper permissions from the start
 COPY --chmod=755 scripts/docker/run_daily.sh ./scripts/docker/run_daily.sh

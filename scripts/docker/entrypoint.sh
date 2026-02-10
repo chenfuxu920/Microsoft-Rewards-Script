@@ -1,9 +1,6 @@
 #!/bin/sh
 set -e
 
-# Ensure Playwright uses preinstalled browsers
-export PLAYWRIGHT_BROWSERS_PATH=0
-
 # 1. Timezone: default to UTC if not provided
 : "${TZ:=UTC}"
 ln -snf "/usr/share/zoneinfo/$TZ" /etc/localtime

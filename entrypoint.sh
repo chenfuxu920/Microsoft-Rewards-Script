@@ -25,6 +25,19 @@ if [ ! -f "src/accounts.json" ]; then
     exit 1
 fi
 
+# Start log forwarder in background to stream logs to Docker
+echo "Starting log forwarder to stream logs to docker logs..."
+/usr/src/microsoft-rewards-script/scripts/docker/log-forwarder.sh &
+LOG_FORWARDER_PID=$!
+
+# Give log forwarder time to start
+sleep 1
+
+# Check if log forwarder is running
+if ! kill -0 "$LOG_FORWARDER_PID" 2>/dev/null; then
+    echo "Warning: Log forwarder failed to start. Logs may not appear in docker logs."
+fi
+
 # 设置 cron 任务
 if [ -f "/etc/cron.d/microsoft-rewards-cron.template" ]; then
     # 替换模板中的占位符
@@ -49,19 +62,6 @@ if [ -f "/etc/cron.d/microsoft-rewards-cron.template" ]; then
     fi
 else
     echo "Warning: Cron template not found at /etc/cron.d/microsoft-rewards-cron.template"
-fi
-
-# Start log forwarder in background to stream logs to Docker
-echo "Starting log forwarder to stream logs to docker logs..."
-/usr/src/microsoft-rewards-script/scripts/docker/log-forwarder.sh &
-LOG_FORWARDER_PID=$!
-
-# Give log forwarder time to start
-sleep 1
-
-# Check if log forwarder is running
-if ! kill -0 "$LOG_FORWARDER_PID" 2>/dev/null; then
-    echo "Warning: Log forwarder failed to start. Logs may not appear in docker logs."
 fi
 
 # Start cron daemon in background
