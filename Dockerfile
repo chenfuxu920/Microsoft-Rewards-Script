@@ -33,7 +33,8 @@ RUN rm -rf node_modules \
     && npm cache clean --force
 
 # Install Chromium Headless Shell, and cleanup
-RUN npx patchright install --only-shell chromium \
+RUN mkdir -p /usr/src/microsoft-rewards-script/pw-browsers \
+    && npx patchright install --only-shell chromium \
     && rm -rf /root/.cache /tmp/* /var/tmp/*
 
 ###############################################################################

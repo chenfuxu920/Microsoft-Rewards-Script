@@ -2,6 +2,8 @@
 set -euo pipefail
 
 export TZ="${TZ:-UTC}"
+export PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-/usr/src/microsoft-rewards-script/pw-browsers}"
+export PATCHRIGHT_BROWSERS_PATH="${PATCHRIGHT_BROWSERS_PATH:-/usr/src/microsoft-rewards-script/pw-browsers}"
 
 cd /usr/src/microsoft-rewards-script
 

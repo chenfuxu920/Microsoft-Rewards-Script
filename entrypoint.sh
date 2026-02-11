@@ -15,6 +15,10 @@ chmod 666 /var/log/microsoft-rewards.log
 chmod 666 /var/log/cron.log
 echo "Log files created at /var/log/microsoft-rewards.log and /var/log/cron.log"
 
+# 确保浏览器路径环境变量存在
+export PLAYWRIGHT_BROWSERS_PATH="${PLAYWRIGHT_BROWSERS_PATH:-/usr/src/microsoft-rewards-script/pw-browsers}"
+export PATCHRIGHT_BROWSERS_PATH="${PATCHRIGHT_BROWSERS_PATH:-/usr/src/microsoft-rewards-script/pw-browsers}"
+
 # 启用 cron 日志记录
 sed -i 's/^#cron\.log/cron.log/' /etc/rsyslog.conf 2>/dev/null || echo "Cron logging already enabled or rsyslog config not found"
 service rsyslog restart 2>/dev/null || echo "rsyslog restart skipped"

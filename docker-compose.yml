@@ -10,12 +10,16 @@ services:
       - ./src/config.json:/usr/src/microsoft-rewards-script/src/config.json:ro
       # - ./src:/usr/src/microsoft-rewards-script/src
       - ./sessions:/usr/src/microsoft-rewards-script/dist/browser/sessions # Optional, saves your login session
+      - ./diagnostics:/usr/src/microsoft-rewards-script/diagnostics # Error diagnostics logs
+      - ./logs/microsoft-rewards.log:/var/log/microsoft-rewards.log # Daily run logs
 
     environment:
       TZ: "Asia/Shanghai" # Set your timezone for proper scheduling
       NODE_ENV: "production"
-      CRON_SCHEDULE: "0 7 * * *" # Customize your schedule, use crontab.guru for formatting
+      CRON_SCHEDULE: "0 7,20 * * *" # Customize your schedule, use crontab.guru for formatting
       RUN_ON_START: "true" # Runs the script immediately on container startup (set to "false" to disable)
+      PLAYWRIGHT_BROWSERS_PATH: "/usr/src/microsoft-rewards-script/pw-browsers"
+      PATCHRIGHT_BROWSERS_PATH: "/usr/src/microsoft-rewards-script/pw-browsers"
 
       # Add scheduled start-time randomization (uncomment to customize or disable, default: enabled)
       #MIN_SLEEP_MINUTES: "5"
@@ -41,3 +45,9 @@ services:
     # Security hardening
     security_opt:
       - no-new-privileges:true
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
