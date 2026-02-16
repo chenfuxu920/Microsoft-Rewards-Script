@@ -87,6 +87,7 @@ echo "Container is running. Scheduled tasks will execute at: $CRON_SCHEDULE"
 echo "Logs will appear in both:"
 echo "  - docker logs <container_name>"
 echo "  - /var/log/microsoft-rewards.log (inside container)"
+echo "  - /var/log/cron.log (inside container)"
 
 # Keep container alive and wait for signals
 # Both cron and log forwarder are running in background

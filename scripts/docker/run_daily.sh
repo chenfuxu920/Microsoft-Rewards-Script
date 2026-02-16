@@ -148,13 +148,34 @@ else
     echo "[$(date)] [run_daily.sh] 跳过随机休眠"
 fi
 
-# 启动实际脚本
-echo "[$(date)] [run_daily.sh] 开始脚本..."
-if npm start; then
-    echo "[$(date)] [run_daily.sh] 脚本成功完成。"
-else
-    echo "[$(date)] [run_daily.sh] 错误: 脚本失败！"
-fi
+# -------------------------------
+#  循环执行逻辑
+# -------------------------------
+while true; do
+    # 1. 清除诊断信息
+    echo "[$(date)] [run_daily.sh] 清除诊断信息..."
+    rm -rf ./diagnostics/*
+
+    # 2. 启动实际脚本
+    echo "[$(date)] [run_daily.sh] 开始脚本..."
+    if npm start; then
+        echo "[$(date)] [run_daily.sh] 脚本运行完成。"
+    else
+        echo "[$(date)] [run_daily.sh] 警告: 脚本运行过程中出现错误 (npm start 退出码非0)。"
+    fi
+
+    # 3. 检查诊断目录是否存在错误日志
+    # 如果目录不为空，说明触发了错误诊断
+    if [ "$(ls -A ./diagnostics 2>/dev/null)" ]; then
+        echo "[$(date)] [run_daily.sh] 检测到 diagnostics 中存在错误日志，将在 1 小时后重新启动脚本..."
+        sleep 3600
+        echo "[$(date)] [run_daily.sh] 正在重新启动脚本..."
+        continue
+    else
+        echo "[$(date)] [run_daily.sh] 未检测到错误诊断日志，运行结束。"
+        break
+    fi
+done
 
 echo "[$(date)] [run_daily.sh] 脚本完成"
 # 锁通过trap自动释放

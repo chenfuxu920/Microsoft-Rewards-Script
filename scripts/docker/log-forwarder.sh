@@ -2,32 +2,20 @@
 # Log forwarder: Monitor log file and output to stdout for Docker logs
 # This allows cron job logs to appear in docker logs
 
-LOG_FILE="${LOG_FILE:-/var/log/microsoft-rewards.log}"
-PID_FILE="/var/log/log-forwarder.pid"
+# Support single LOG_FILE or multiple via space-separated list
+# Default to both main log and cron log
+# No longer using PID file to avoid issues with PID recycling in Docker
+# and persistent volumes. The entrypoint script handles starting this once.
+LOG_FILES="${LOG_FILE:-/var/log/microsoft-rewards.log /var/log/cron.log}"
 
-# Check if already running
-if [ -f "$PID_FILE" ]; then
-    OLD_PID=$(cat "$PID_FILE")
-    if kill -0 "$OLD_PID" 2>/dev/null; then
-        echo "Log forwarder already running (PID: $OLD_PID)"
-        exit 0
-    else
-        rm -f "$PID_FILE"
-    fi
-fi
-
-# Save PID
-echo $$ > "$PID_FILE"
-
-# Ensure log file exists
-touch "$LOG_FILE"
-
-# Get initial size
-LAST_SIZE=$(stat -c%s "$LOG_FILE" 2>/dev/null || echo 0)
-
-echo "[$(date '+%a %b %d %H:%M:%S %Z %Y')] [log-forwarder] Log forwarder started | watching: $LOG_FILE"
-
-# Monitor log file for new content
-tail -n 0 -F "$LOG_FILE" 2>/dev/null | while IFS= read -r line; do
-    echo "$line"
+# Ensure log files exist
+for f in $LOG_FILES; do
+    touch "$f"
 done
+
+echo "[$(date '+%a %b %d %H:%M:%S %Z %Y')] [log-forwarder] Log forwarder started | watching: $LOG_FILES"
+
+# Monitor log files for new content and stream to stdout
+# Use tail -F to handle file rotation/recreation
+# -q to suppress headers when watching multiple files (cleaner docker logs)
+exec tail -n 0 -F -q $LOG_FILES
