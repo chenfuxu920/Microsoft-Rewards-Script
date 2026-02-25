@@ -11,7 +11,7 @@ services:
       # - ./src:/usr/src/microsoft-rewards-script/src
       - ./sessions:/usr/src/microsoft-rewards-script/dist/browser/sessions # Optional, saves your login session
       - ./diagnostics:/usr/src/microsoft-rewards-script/diagnostics # Error diagnostics logs
-      - ./logs/microsoft-rewards.log:/var/log/microsoft-rewards.log # Daily run logs
+      - ./logs:/usr/src/microsoft-rewards-script/logs # Daily run logs
 
     environment:
       TZ: "Asia/Shanghai" # Set your timezone for proper scheduling

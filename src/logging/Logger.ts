@@ -122,7 +122,7 @@ export class Logger {
         }
 
         // 保存日志到本地文件
-        writeLogToFile(cleanMsg)
+        // writeLogToFile(cleanMsg)
 
         const badge = platformBadge(isMobile)
         const consoleStr = `[${now}] [${userName}] [${levelTag}] ${badge} [${title}] ${formatted}`

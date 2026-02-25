@@ -7,9 +7,25 @@ export PATCHRIGHT_BROWSERS_PATH="${PATCHRIGHT_BROWSERS_PATH:-/usr/src/microsoft-
 
 cd /usr/src/microsoft-rewards-script
 
-# Redirect all output to log file to avoid duplication in Docker logs
-# log-forwarder.sh will handle streaming this to Docker stdout
-exec >> /var/log/microsoft-rewards.log 2>&1
+# Ensure log directory exists
+LOG_DIR="/usr/src/microsoft-rewards-script/logs"
+mkdir -p "$LOG_DIR"
+
+# Define log file with date
+TODAY=$(date +%Y-%m-%d)
+LOG_FILE="$LOG_DIR/run-${TODAY}.log"
+
+# Clean up logs older than 3 days
+find "$LOG_DIR" -name "run-*.log" -type f -mtime +2 -delete
+
+# Redirect output based on execution environment
+if [ -t 1 ]; then
+    # Interactive session: Log to file and stdout (user sees it)
+    exec > >(tee -a "$LOG_FILE") 2>&1
+else
+    # Non-interactive (Cron/Background): Log to file and Docker logs (PID 1 stdout)
+    exec > >(tee -a "$LOG_FILE" > /proc/1/fd/1) 2> >(tee -a "$LOG_FILE" > /proc/1/fd/2)
+fi
 
 LOCKFILE=/tmp/run_daily.lock
 
