@@ -294,29 +294,33 @@ export default class BrowserFunc {
     }
 
     async closeBrowser(browser: BrowserContext, email: string) {
-        try {
-            const cookies = await browser.cookies()
+        const rootBrowser = (browser as any).browser?.() || null
 
-            // 保存cookies
-            this.bot.logger.debug(
-                this.bot.isMobile,
-                'CLOSE-BROWSER',
-                `保存 ${cookies.length} 个cookies到会话文件夹！`
-            )
+        try {
+            // Try to save cookies
+            const cookies = await browser.cookies()
+            this.bot.logger.debug(this.bot.isMobile, 'CLOSE-BROWSER', `Saving ${cookies.length} cookies.`)
             await saveSessionData(this.bot.config.sessionPath, cookies, email, this.bot.isMobile)
 
-            await this.bot.utils.waitRandom(2000,5000)
-
-            // 关闭浏览器
-            await browser.close()
-            this.bot.logger.info(this.bot.isMobile, 'CLOSE-BROWSER', '浏览器已干净地关闭！')
+            await this.bot.utils.wait(2000)
         } catch (error) {
-            this.bot.logger.error(
-                this.bot.isMobile,
-                'CLOSE-BROWSER',
-                `发生错误: ${error instanceof Error ? error.message : String(error)}`
-            )
-            throw error
+            this.bot.logger.error(this.bot.isMobile, 'CLOSE-BROWSER', `Failed to save session: ${error}`)
+        } finally {
+            try {
+                await browser.close()
+
+                if (rootBrowser) {
+                    await rootBrowser.close().catch(() => {})
+                }
+
+                this.bot.logger.info(this.bot.isMobile, 'CLOSE-BROWSER', '浏览器已干净地关闭！')
+            } catch (closeError) {
+                this.bot.logger.warn(
+                    this.bot.isMobile,
+                    'CLOSE-BROWSER',
+                    'Shutdown encountered an error, but process exiting.'
+                )
+            }
         }
     }
 

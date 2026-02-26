@@ -6,6 +6,6 @@ PLAYWRIGHT_BROWSERS_PATH=/usr/src/microsoft-rewards-script/pw-browsers
 PATCHRIGHT_BROWSERS_PATH=/usr/src/microsoft-rewards-script/pw-browsers
 
 # Run automation according to CRON_SCHEDULE; redirect both stdout & stderr to Docker logs
-${CRON_SCHEDULE} root /usr/src/microsoft-rewards-script/scripts/docker/run_daily_cron.sh
+${CRON_SCHEDULE} root /bin/bash /usr/src/microsoft-rewards-script/scripts/docker/run_daily.sh >> /proc/1/fd/1 2>&1
 
 

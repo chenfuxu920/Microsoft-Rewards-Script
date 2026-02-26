@@ -25,3 +25,4 @@ QWEN.md
 bun.lock
 logs/
 .stfolder/
+.env

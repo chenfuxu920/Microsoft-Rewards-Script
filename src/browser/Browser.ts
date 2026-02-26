@@ -35,7 +35,7 @@ class Browser {
         '--no-default-browser-check', // 不检查默认浏览器
         '--disable-user-media-security=true', // 禁用用户媒体安全
         '--disable-blink-features=Attestation', // 禁用Blink特性认证
-        '--disable-features=WebAuthentication,PasswordManagerOnboarding,PasswordManager,EnablePasswordsAccountStorage,Passkeys', // 禁用特定功能
+        '--disable-features=WebAuthentication,PasswordManagerOnboarding,PasswordManager,EnablePasswordsAccountStorage,Passkeys,WebAuthenticationProxy,U2F', // 禁用特定功能
         '--disable-save-password-bubble', // 禁用保存密码提示
         '--lang=zh-CN'
 
@@ -84,9 +84,14 @@ class Browser {
 
             // 获取或生成浏览器指纹
             const fingerprint = sessionData.fingerprint ?? (await this.generateFingerprint(this.bot.isMobile))
-
             // 创建带注入指纹的浏览器上下文
-            const context = await newInjectedContext(browser as any, { fingerprint })
+            const context = await newInjectedContext(browser as any, {
+                fingerprint,
+                newContextOptions: {
+                    permissions: [],
+                    ignoreHTTPSErrors: true
+                }
+            })
 
             // 添加初始化脚本以禁用WebAuthn
             await context.addInitScript(() => {
