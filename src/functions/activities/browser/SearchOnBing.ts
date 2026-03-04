@@ -106,7 +106,33 @@ export class SearchOnBing extends Workers {
                 const cvid = randomBytes(16).toString('hex')
                 const url = `${this.bingHome}/search?q=${encodeURIComponent(query)}&PC=U531&FORM=ANNTA1&cvid=${cvid}`
 
-                await this.bot.mainMobilePage.goto(url)
+                const maxNavigateRetries = 3
+                let navigateSuccess = false
+                for (let retry = 0; retry < maxNavigateRetries; retry++) {
+                    try {
+                        await this.bot.mainMobilePage.goto(url, { timeout: 30000 })
+                        navigateSuccess = true
+                        break
+                    } catch (error) {
+                        if (retry >= maxNavigateRetries - 1) {
+                            this.bot.logger.error(
+                                this.bot.isMobile,
+                                'SEARCH-ON-BING-SEARCH',
+                                `导航失败 | attempt=${retry + 1}/${maxNavigateRetries} | query="${query}" | error=${error instanceof Error ? error.message : String(error)}`
+                            )
+                        } else {
+                            this.bot.logger.warn(
+                                this.bot.isMobile,
+                                'SEARCH-ON-BING-SEARCH',
+                                `导航失败，重试中 | attempt=${retry + 1}/${maxNavigateRetries} | query="${query}" | error=${error instanceof Error ? error.message : String(error)}`
+                            )
+                            await this.bot.utils.wait(3000)
+                        }
+                    }
+                }
+                if (!navigateSuccess) {
+                    continue
+                }
 
                 // 等待页面加载完成
                 await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
@@ -165,7 +191,28 @@ export class SearchOnBing extends Workers {
                 )
             } finally {
                 await this.bot.utils.wait(this.bot.utils.randomDelay(5000, 15000))
-                await page.goto(this.bot.config.baseURL, { timeout: 5000 }).catch(() => {})
+                const maxRetries = 3
+                for (let retry = 0; retry < maxRetries; retry++) {
+                    try {
+                        await page.goto(this.bot.config.baseURL, { timeout: 30000 })
+                        break
+                    } catch (error) {
+                        if (retry >= maxRetries - 1) {
+                            this.bot.logger.warn(
+                                this.bot.isMobile,
+                                'SEARCH-ON-BING-SEARCH',
+                                `返回基础URL失败 | error=${error instanceof Error ? error.message : String(error)}`
+                            )
+                        } else {
+                            this.bot.logger.debug(
+                                this.bot.isMobile,
+                                'SEARCH-ON-BING-SEARCH',
+                                `返回基础URL重试中 | attempt=${retry + 1}/${maxRetries}`
+                            )
+                            await this.bot.utils.wait(2000)
+                        }
+                    }
+                }
             }
         }
 

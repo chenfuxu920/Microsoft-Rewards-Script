@@ -114,3 +114,110 @@ export interface RedditListing {
         }>
     }
 }
+
+// Hacker News
+export interface HackerNewsItem {
+    id: number
+    title: string
+    by: string
+    score: number
+    url?: string
+    text?: string
+}
+
+// GitHub Trending (第三方API)
+export interface GitHubTrendingRepo {
+    name: string
+    full_name: string
+    html_url: string
+    description: string
+    language: string
+    stargazers_count: number
+}
+
+// Stack Overflow
+export interface StackOverflowResponse {
+    items: Array<{
+        title: string
+        link: string
+        score: number
+        tags: string[]
+    }>
+}
+
+// 掘金热门
+export interface JuejinHotItem {
+    article_id: string
+    title: string
+    brief_content: string
+    category: {
+        category_name: string
+    }
+    tags: Array<{
+        tag_name: string
+    }>
+}
+
+// V2EX
+export interface V2EXTopic {
+    id: number
+    title: string
+    node: {
+        name: string
+        title: string
+    }
+}
+
+// 思否 SegmentFault
+export interface SegmentFaultArticle {
+    id: number
+    title: string
+    summary: string
+    tags: Array<{
+        name: string
+    }>
+}
+
+// 开源中国 OSChina
+export interface OSChinaNews {
+    id: number
+    title: string
+    summary: string
+}
+
+// InfoQ
+export interface InfoQArticle {
+    title: string
+    summary: string
+    tags: Array<{
+        name: string
+    }>
+}
+
+// 36氪技术
+export interface Kr36TechItem {
+    id: number
+    title: string
+    summary: string
+}
+
+// CSDN 热门
+export interface CSDNHotItem {
+    title: string
+    url: string
+    tags: string[]
+}
+
+// 博客园 热门
+export interface CnblogsHotItem {
+    title: string
+    summary: string
+    tags: string[]
+}
+
+// 知乎技术话题
+export interface ZhihuTechTopic {
+    id: number
+    title: string
+    excerpt: string
+}

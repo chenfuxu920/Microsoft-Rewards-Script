@@ -13,7 +13,8 @@
         "doDesktopSearch": true,
         "doMobileSearch": true,
         "doDailyCheckIn": true,
-        "doReadToEarn": true
+        "doReadToEarn": true,
+        "doContinuousSearch": false
     },
     "searchOnBingLocalQueries": false,
     "globalTimeout": "50sec",
@@ -21,7 +22,7 @@
         "scrollRandomResults": true,
         "clickRandomResults": true,
         "parallelSearching": false,
-        "queryEngines": ["china", "local"],
+        "queryEngines": [],
         "searchResultVisitTime": "20sec",
         "searchDelay": {
             "min": "5min",
@@ -31,6 +32,17 @@
             "min": "6min",
             "max": "11min"
         }
+    },
+    "continuousSearch": {
+        "enabled": false,
+        "depthMin": 3,
+        "depthMax": 5,
+        "queryIntervalMin": 5,
+        "queryIntervalMax": 10,
+        "durationMin": 5,
+        "durationMax": 8,
+        "useMobile": true,
+        "useDesktop": false
     },
     "debugLogs": false,
     "consoleLogFilter": {

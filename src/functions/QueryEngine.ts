@@ -1,7 +1,21 @@
 import type { AxiosRequestConfig } from 'axios'
 import * as fs from 'fs'
 import path from 'path'
-import type { GoogleSearch, GoogleTrendsResponse, RedditListing, WikipediaTopResponse } from '../interface/Search'
+import type {
+    GoogleSearch,
+    GoogleTrendsResponse,
+    RedditListing,
+    WikipediaTopResponse,
+    HackerNewsItem,
+    GitHubTrendingRepo,
+    StackOverflowResponse,
+    JuejinHotItem,
+    V2EXTopic,
+    SegmentFaultArticle,
+    OSChinaNews,
+    CSDNHotItem,
+    CnblogsHotItem
+} from '../interface/Search'
 import type { MicrosoftRewardsBot } from '../index'
 import { QueryEngine } from '../interface/Config'
 
@@ -19,23 +33,44 @@ export class QueryCore {
     ): Promise<string[]> {
         const {
             shuffle = false,
-            sourceOrder = ['china', 'google', 'wikipedia', 'reddit', 'local'],
+            sourceOrder,
             related = true,
             langCode = 'zh',
             geoLocale = 'CN'
         } = options
 
+        // 编程技术相关数据源（优先）
+        const programmingSources: QueryEngine[] = [
+            'hackernews',
+            'github',
+            'stackoverflow',
+            'juejin',
+            'v2ex',
+            'segmentfault',
+            'oschina',
+            'infoq',
+            'csdn',
+            'cnblogs'
+        ]
+
+        // 国内热词榜数据源（备选）
+        const chinaTrendSources: QueryEngine[] = ['china']
+
+        // 如果用户指定了 sourceOrder，则使用用户的配置
+        // 否则使用默认逻辑：优先编程源，不足时使用国内热词榜
+        const useDefaultLogic = !sourceOrder
+
         try {
             this.bot.logger.debug(
                 this.bot.isMobile,
                 'QUERY-MANAGER',
-                `开始 | shuffle=${shuffle}, related=${related}, lang=${langCode}, geo=${geoLocale}, sources=${sourceOrder.join(',')}`
+                `开始 | shuffle=${shuffle}, related=${related}, lang=${langCode}, geo=${geoLocale}, 使用默认逻辑=${useDefaultLogic}`
             )
 
             const topicLists: string[][] = []
 
             const sourceHandlers: Record<
-                'china' | 'google' | 'wikipedia' | 'reddit' | 'local',
+                QueryEngine,
                 (() => Promise<string[]>) | (() => string[])
             > = {
                 google: async () => {
@@ -60,17 +95,137 @@ export class QueryCore {
                 },
                 china: async () => {
                     const topics = await this.getChinaTrends(geoLocale.toUpperCase()).catch(() => [])
-                    this.bot.logger.debug(this.bot.isMobile, 'QUERY-MANAGER', `中国: ${topics.length}`)
+                    this.bot.logger.debug(this.bot.isMobile, 'QUERY-MANAGER', `中国热搜: ${topics.length}`)
+                    return topics
+                },
+                hackernews: async () => {
+                    const topics = await this.getHackerNewsTopics().catch(() => [])
+                    this.bot.logger.debug(this.bot.isMobile, 'QUERY-MANAGER', `Hacker News: ${topics.length}`)
+                    return topics
+                },
+                github: async () => {
+                    const topics = await this.getGitHubTrending().catch(() => [])
+                    this.bot.logger.debug(this.bot.isMobile, 'QUERY-MANAGER', `GitHub: ${topics.length}`)
+                    return topics
+                },
+                stackoverflow: async () => {
+                    const topics = await this.getStackOverflowTopics().catch(() => [])
+                    this.bot.logger.debug(this.bot.isMobile, 'QUERY-MANAGER', `Stack Overflow: ${topics.length}`)
+                    return topics
+                },
+                juejin: async () => {
+                    const topics = await this.getJuejinHot().catch(() => [])
+                    this.bot.logger.debug(this.bot.isMobile, 'QUERY-MANAGER', `掘金: ${topics.length}`)
+                    return topics
+                },
+                v2ex: async () => {
+                    const topics = await this.getV2EXTopics().catch(() => [])
+                    this.bot.logger.debug(this.bot.isMobile, 'QUERY-MANAGER', `V2EX: ${topics.length}`)
+                    return topics
+                },
+                segmentfault: async () => {
+                    const topics = await this.getSegmentFaultArticles().catch(() => [])
+                    this.bot.logger.debug(this.bot.isMobile, 'QUERY-MANAGER', `思否: ${topics.length}`)
+                    return topics
+                },
+                oschina: async () => {
+                    const topics = await this.getOSChinaNews().catch(() => [])
+                    this.bot.logger.debug(this.bot.isMobile, 'QUERY-MANAGER', `开源中国: ${topics.length}`)
+                    return topics
+                },
+                infoq: async () => {
+                    const topics = await this.getInfoQArticles().catch(() => [])
+                    this.bot.logger.debug(this.bot.isMobile, 'QUERY-MANAGER', `InfoQ: ${topics.length}`)
+                    return topics
+                },
+                csdn: async () => {
+                    const topics = await this.getCSDNHot().catch(() => [])
+                    this.bot.logger.debug(this.bot.isMobile, 'QUERY-MANAGER', `CSDN: ${topics.length}`)
+                    return topics
+                },
+                cnblogs: async () => {
+                    const topics = await this.getCnblogsHot().catch(() => [])
+                    this.bot.logger.debug(this.bot.isMobile, 'QUERY-MANAGER', `博客园: ${topics.length}`)
+                    return topics
+                },
+                zhihu: async () => {
+                    const topics = await this.getZhihuTechTopics().catch(() => [])
+                    this.bot.logger.debug(this.bot.isMobile, 'QUERY-MANAGER', `知乎: ${topics.length}`)
                     return topics
                 }
             }
 
-            for (const source of sourceOrder) {
-                const handler = sourceHandlers[source]
-                if (!handler) continue
+            // 获取指定源的搜索词
+            const fetchFromSources = async (sources: QueryEngine[]): Promise<string[][]> => {
+                const results: string[][] = []
+                for (const source of sources) {
+                    const handler = sourceHandlers[source]
+                    if (!handler) continue
 
-                const topics = await Promise.resolve(handler())
-                if (topics.length) topicLists.push(topics)
+                    const topics = await Promise.resolve(handler())
+                    if (topics.length) results.push(topics)
+                }
+                return results
+            }
+
+            let finalSourceOrder: QueryEngine[] = []
+
+            if (useDefaultLogic) {
+                // 默认逻辑：优先编程源，不足时使用国内热词榜
+                this.bot.logger.debug(
+                    this.bot.isMobile,
+                    'QUERY-MANAGER',
+                    '使用默认逻辑：优先编程技术源，不足时使用国内热词榜'
+                )
+
+                // 先尝试编程技术源
+                const programmingTopics = await fetchFromSources(programmingSources)
+                const programmingCount = programmingTopics.flat().length
+
+                this.bot.logger.debug(
+                    this.bot.isMobile,
+                    'QUERY-MANAGER',
+                    `编程技术源获取 | 数量=${programmingCount}`
+                )
+
+                if (programmingCount > 0) {
+                    topicLists.push(...programmingTopics)
+                    finalSourceOrder = [...programmingSources]
+                }
+
+                // 如果编程源数量不足（少于50个），则补充国内热词榜
+                const MIN_TOPICS_THRESHOLD = 50
+                if (programmingCount < MIN_TOPICS_THRESHOLD) {
+                    this.bot.logger.debug(
+                        this.bot.isMobile,
+                        'QUERY-MANAGER',
+                        `编程技术源数量不足 ${MIN_TOPICS_THRESHOLD}，补充国内热词榜`
+                    )
+
+                    const chinaTopics = await fetchFromSources(chinaTrendSources)
+                    const chinaCount = chinaTopics.flat().length
+
+                    this.bot.logger.debug(
+                        this.bot.isMobile,
+                        'QUERY-MANAGER',
+                        `国内热词榜获取 | 数量=${chinaCount}`
+                    )
+
+                    if (chinaCount > 0) {
+                        topicLists.push(...chinaTopics)
+                        finalSourceOrder = [...finalSourceOrder, ...chinaTrendSources]
+                    }
+                }
+            } else {
+                // 使用用户指定的源顺序
+                finalSourceOrder = sourceOrder
+                for (const source of sourceOrder) {
+                    const handler = sourceHandlers[source]
+                    if (!handler) continue
+
+                    const topics = await Promise.resolve(handler())
+                    if (topics.length) topicLists.push(topics)
+                }
             }
 
             this.bot.logger.debug(
@@ -545,5 +700,495 @@ export class QueryCore {
 
         return queryTerms.flatMap(x => [x.topic, ...x.related]);
 
+    }
+
+    // ==================== 国际编程技术 API ====================
+
+    /**
+     * 获取 Hacker News 热门话题
+     * @returns Promise<string[]> - 热门话题标题数组
+     */
+    async getHackerNewsTopics(): Promise<string[]> {
+        try {
+            const request: AxiosRequestConfig = {
+                url: 'https://hacker-news.firebaseio.com/v0/topstories.json',
+                method: 'GET',
+                headers: {
+                    ...(this.bot.fingerprint?.headers ?? {})
+                }
+            }
+
+            const response = await this.bot.axios.request(request, this.bot.config.proxy.queryEngine)
+            const storyIds = (response.data as number[]).slice(0, 30)
+
+            const stories = await Promise.all(
+                storyIds.map(async (id) => {
+                    try {
+                        const storyRequest: AxiosRequestConfig = {
+                            url: `https://hacker-news.firebaseio.com/v0/item/${id}.json`,
+                            method: 'GET'
+                        }
+                        const storyRes = await this.bot.axios.request(storyRequest, this.bot.config.proxy.queryEngine)
+                        const item = storyRes.data as HackerNewsItem
+                        return item.title
+                    } catch {
+                        return ''
+                    }
+                })
+            )
+
+            const out = stories.filter(Boolean)
+
+            if (!out.length) {
+                this.bot.logger.debug(this.bot.isMobile, 'SEARCH-HACKERNEWS', '空 Hacker News 列表')
+            }
+
+            return out
+        } catch (error) {
+            this.bot.logger.debug(
+                this.bot.isMobile,
+                'SEARCH-HACKERNEWS',
+                `请求失败 | 错误=${
+                    error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+                }`
+            )
+            return []
+        }
+    }
+
+    /**
+     * 获取 GitHub Trending 热门项目
+     * @param language - 编程语言筛选，默认为空（全部）
+     * @returns Promise<string[]> - 热门项目名称和描述数组
+     */
+    async getGitHubTrending(language: string = ''): Promise<string[]> {
+        try {
+            const langParam = language ? `?language=${language}` : ''
+            const request: AxiosRequestConfig = {
+                url: `https://api.gitterapp.com/v2/repositories${langParam}`,
+                method: 'GET',
+                headers: {
+                    ...(this.bot.fingerprint?.headers ?? {}),
+                    'Accept': 'application/json'
+                }
+            }
+
+            const response = await this.bot.axios.request(request, this.bot.config.proxy.queryEngine)
+            const repos = (response.data as GitHubTrendingRepo[]).slice(0, 30)
+
+            const out = repos.map(repo => {
+                const parts = [repo.name]
+                if (repo.description) parts.push(repo.description)
+                if (repo.language) parts.push(repo.language)
+                return parts.join(' ')
+            })
+
+            if (!out.length) {
+                this.bot.logger.debug(this.bot.isMobile, 'SEARCH-GITHUB-TRENDING', '空 GitHub Trending 列表')
+            }
+
+            return out
+        } catch (error) {
+            this.bot.logger.debug(
+                this.bot.isMobile,
+                'SEARCH-GITHUB-TRENDING',
+                `请求失败 | 错误=${
+                    error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+                }`
+            )
+            return []
+        }
+    }
+
+    /**
+     * 获取 Stack Overflow 热门问题
+     * @param tagged - 标签筛选，默认为空
+     * @returns Promise<string[]> - 热门问题标题数组
+     */
+    async getStackOverflowTopics(tagged: string = ''): Promise<string[]> {
+        try {
+            const taggedParam = tagged ? `&tagged=${encodeURIComponent(tagged)}` : ''
+            const request: AxiosRequestConfig = {
+                url: `https://api.stackexchange.com/2.3/questions?order=desc&sort=hot&site=stackoverflow&pagesize=30${taggedParam}`,
+                method: 'GET',
+                headers: {
+                    ...(this.bot.fingerprint?.headers ?? {})
+                }
+            }
+
+            const response = await this.bot.axios.request(request, this.bot.config.proxy.queryEngine)
+            const soResponse = response.data as StackOverflowResponse
+            const questions = soResponse.items ?? []
+
+            const out = questions.map(q => {
+                const tags = q.tags?.slice(0, 3).join(' ') ?? ''
+                return tags ? `${q.title} ${tags}` : q.title
+            })
+
+            if (!out.length) {
+                this.bot.logger.debug(this.bot.isMobile, 'SEARCH-STACKOVERFLOW', '空 Stack Overflow 列表')
+            }
+
+            return out
+        } catch (error) {
+            this.bot.logger.debug(
+                this.bot.isMobile,
+                'SEARCH-STACKOVERFLOW',
+                `请求失败 | 错误=${
+                    error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+                }`
+            )
+            return []
+        }
+    }
+
+    // ==================== 国内编程技术 API ====================
+
+    /**
+     * 获取掘金热门文章
+     * @param category - 分类，默认为 'all'
+     * @returns Promise<string[]> - 热门文章标题数组
+     */
+    async getJuejinHot(category: string = 'all'): Promise<string[]> {
+        try {
+            const request: AxiosRequestConfig = {
+                url: 'https://api.juejin.cn/recommend_api/v1/article/recommend_cate_feed',
+                method: 'POST',
+                headers: {
+                    ...(this.bot.fingerprint?.headers ?? {}),
+                    'Content-Type': 'application/json'
+                },
+                data: {
+                    id_type: 2,
+                    sort_type: 200,
+                    cate_id: '6809637773935378440',
+                    cursor: '0',
+                    limit: 30
+                }
+            }
+
+            const response = await this.bot.axios.request(request, this.bot.config.proxy.queryEngine)
+            const articles = response.data?.data ?? []
+
+            const out = articles.map((item: any) => {
+                const title = item.article_info?.title ?? ''
+                const tags = item.tags?.slice(0, 2).map((t: any) => t.tag_name).join(' ') ?? ''
+                return tags ? `${title} ${tags}` : title
+            }).filter(Boolean)
+
+            if (!out.length) {
+                this.bot.logger.debug(this.bot.isMobile, 'SEARCH-JUEJIN', '空掘金列表')
+            }
+
+            return out
+        } catch (error) {
+            this.bot.logger.debug(
+                this.bot.isMobile,
+                'SEARCH-JUEJIN',
+                `请求失败 | 错误=${
+                    error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+                }`
+            )
+            return []
+        }
+    }
+
+    /**
+     * 获取 V2EX 热门话题
+     * @returns Promise<string[]> - 热门话题标题数组
+     */
+    async getV2EXTopics(): Promise<string[]> {
+        try {
+            const request: AxiosRequestConfig = {
+                url: 'https://www.v2ex.com/api/topics/hot.json',
+                method: 'GET',
+                headers: {
+                    ...(this.bot.fingerprint?.headers ?? {})
+                }
+            }
+
+            const response = await this.bot.axios.request(request, this.bot.config.proxy.queryEngine)
+            const topics = response.data ?? []
+
+            const out = topics.map((item: any) => {
+                const title = item.title ?? ''
+                const node = item.node?.name ?? ''
+                return node ? `${title} ${node}` : title
+            }).filter(Boolean)
+
+            if (!out.length) {
+                this.bot.logger.debug(this.bot.isMobile, 'SEARCH-V2EX', '空 V2EX 列表')
+            }
+
+            return out
+        } catch (error) {
+            this.bot.logger.debug(
+                this.bot.isMobile,
+                'SEARCH-V2EX',
+                `请求失败 | 错误=${
+                    error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+                }`
+            )
+            return []
+        }
+    }
+
+    /**
+     * 获取思否 SegmentFault 热门文章
+     * @returns Promise<string[]> - 热门文章标题数组
+     */
+    async getSegmentFaultArticles(): Promise<string[]> {
+        try {
+            const request: AxiosRequestConfig = {
+                url: 'https://segmentfault.com/api/user/articles?limit=30&offset=0&order=hot',
+                method: 'GET',
+                headers: {
+                    ...(this.bot.fingerprint?.headers ?? {})
+                }
+            }
+
+            const response = await this.bot.axios.request(request, this.bot.config.proxy.queryEngine)
+            const articles = response.data?.data?.rows ?? []
+
+            const out = articles.map((item: any) => {
+                const title = item.title ?? ''
+                const tags = item.tags?.slice(0, 2).map((t: any) => t.name).join(' ') ?? ''
+                return tags ? `${title} ${tags}` : title
+            }).filter(Boolean)
+
+            if (!out.length) {
+                this.bot.logger.debug(this.bot.isMobile, 'SEARCH-SEGMENTFAULT', '空思否列表')
+            }
+
+            return out
+        } catch (error) {
+            this.bot.logger.debug(
+                this.bot.isMobile,
+                'SEARCH-SEGMENTFAULT',
+                `请求失败 | 错误=${
+                    error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+                }`
+            )
+            return []
+        }
+    }
+
+    /**
+     * 获取开源中国 OSChina 热门资讯
+     * @returns Promise<string[]> - 热门资讯标题数组
+     */
+    async getOSChinaNews(): Promise<string[]> {
+        try {
+            const request: AxiosRequestConfig = {
+                url: 'https://www.oschina.net/news/ajax_news_list?show=hot&p=1',
+                method: 'GET',
+                headers: {
+                    ...(this.bot.fingerprint?.headers ?? {})
+                }
+            }
+
+            const response = await this.bot.axios.request(request, this.bot.config.proxy.queryEngine)
+            
+            // 解析 HTML 响应
+            const html = response.data
+            const titleRegex = /<a[^>]*class="title"[^>]*>([^<]+)<\/a>/g
+            const titles: string[] = []
+            let match
+
+            while ((match = titleRegex.exec(html)) !== null) {
+                if (match[1]) {
+                    titles.push(match[1].trim())
+                }
+            }
+
+            const out = titles.slice(0, 30)
+
+            if (!out.length) {
+                this.bot.logger.debug(this.bot.isMobile, 'SEARCH-OSCHINA', '空开源中国列表')
+            }
+
+            return out
+        } catch (error) {
+            this.bot.logger.debug(
+                this.bot.isMobile,
+                'SEARCH-OSCHINA',
+                `请求失败 | 错误=${
+                    error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+                }`
+            )
+            return []
+        }
+    }
+
+    /**
+     * 获取 InfoQ 热门文章
+     * @returns Promise<string[]> - 热门文章标题数组
+     */
+    async getInfoQArticles(): Promise<string[]> {
+        try {
+            const request: AxiosRequestConfig = {
+                url: 'https://www.infoq.cn/public/v1/article/getList',
+                method: 'POST',
+                headers: {
+                    ...(this.bot.fingerprint?.headers ?? {}),
+                    'Content-Type': 'application/json'
+                },
+                data: {
+                    size: 30,
+                    type: 1,
+                    sort: 'hot'
+                }
+            }
+
+            const response = await this.bot.axios.request(request, this.bot.config.proxy.queryEngine)
+            const articles = response.data?.data ?? []
+
+            const out = articles.map((item: any) => {
+                const title = item.title ?? ''
+                const tags = item.topicNames?.slice(0, 2).join(' ') ?? ''
+                return tags ? `${title} ${tags}` : title
+            }).filter(Boolean)
+
+            if (!out.length) {
+                this.bot.logger.debug(this.bot.isMobile, 'SEARCH-INFOQ', '空 InfoQ 列表')
+            }
+
+            return out
+        } catch (error) {
+            this.bot.logger.debug(
+                this.bot.isMobile,
+                'SEARCH-INFOQ',
+                `请求失败 | 错误=${
+                    error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+                }`
+            )
+            return []
+        }
+    }
+
+    /**
+     * 获取 CSDN 热门文章
+     * @returns Promise<string[]> - 热门文章标题数组
+     */
+    async getCSDNHot(): Promise<string[]> {
+        try {
+            const request: AxiosRequestConfig = {
+                url: 'https://blog.csdn.net/api/user/hotwords',
+                method: 'GET',
+                headers: {
+                    ...(this.bot.fingerprint?.headers ?? {})
+                }
+            }
+
+            const response = await this.bot.axios.request(request, this.bot.config.proxy.queryEngine)
+            const data = response.data?.data ?? []
+
+            const out = data.map((item: any) => {
+                const title = item.title ?? item.keyword ?? ''
+                return title
+            }).filter(Boolean).slice(0, 30)
+
+            if (!out.length) {
+                this.bot.logger.debug(this.bot.isMobile, 'SEARCH-CSDN', '空 CSDN 列表')
+            }
+
+            return out
+        } catch (error) {
+            this.bot.logger.debug(
+                this.bot.isMobile,
+                'SEARCH-CSDN',
+                `请求失败 | 错误=${
+                    error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+                }`
+            )
+            return []
+        }
+    }
+
+    /**
+     * 获取博客园热门文章
+     * @returns Promise<string[]> - 热门文章标题数组
+     */
+    async getCnblogsHot(): Promise<string[]> {
+        try {
+            const request: AxiosRequestConfig = {
+                url: 'https://www.cnblogs.com/aggsite/headline',
+                method: 'GET',
+                headers: {
+                    ...(this.bot.fingerprint?.headers ?? {})
+                }
+            }
+
+            const response = await this.bot.axios.request(request, this.bot.config.proxy.queryEngine)
+            
+            // 解析 HTML 响应
+            const html = response.data
+            const titleRegex = /<a[^>]*class="post-item-title"[^>]*>([^<]+)<\/a>/g
+            const titles: string[] = []
+            let match
+
+            while ((match = titleRegex.exec(html)) !== null) {
+                if (match[1]) {
+                    titles.push(match[1].trim())
+                }
+            }
+
+            const out = titles.slice(0, 30)
+
+            if (!out.length) {
+                this.bot.logger.debug(this.bot.isMobile, 'SEARCH-CNBOOKS', '空博客园列表')
+            }
+
+            return out
+        } catch (error) {
+            this.bot.logger.debug(
+                this.bot.isMobile,
+                'SEARCH-CNBOOKS',
+                `请求失败 | 错误=${
+                    error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+                }`
+            )
+            return []
+        }
+    }
+
+    /**
+     * 获取知乎技术话题热门问题
+     * @returns Promise<string[]> - 热门问题标题数组
+     */
+    async getZhihuTechTopics(): Promise<string[]> {
+        try {
+            const request: AxiosRequestConfig = {
+                url: 'https://www.zhihu.com/api/v4/topics/19554298/feeds/essence?limit=30&offset=0',
+                method: 'GET',
+                headers: {
+                    ...(this.bot.fingerprint?.headers ?? {})
+                }
+            }
+
+            const response = await this.bot.axios.request(request, this.bot.config.proxy.queryEngine)
+            const data = response.data?.data ?? []
+
+            const out = data.map((item: any) => {
+                const title = item.target?.title ?? ''
+                const excerpt = item.target?.excerpt?.slice(0, 50) ?? ''
+                return excerpt ? `${title} ${excerpt}` : title
+            }).filter(Boolean)
+
+            if (!out.length) {
+                this.bot.logger.debug(this.bot.isMobile, 'SEARCH-ZHIHU', '空知乎列表')
+            }
+
+            return out
+        } catch (error) {
+            this.bot.logger.debug(
+                this.bot.isMobile,
+                'SEARCH-ZHIHU',
+                `请求失败 | 错误=${
+                    error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+                }`
+            )
+            return []
+        }
     }
 }

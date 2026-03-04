@@ -20,7 +20,36 @@ const DelaySchema = z.object({
     max: NumberOrString
 })
 
-const QueryEngineSchema = z.enum(['china', 'google', 'wikipedia', 'reddit', 'local'])
+const ContinuousSearchSchema = z.object({
+    enabled: z.boolean(),
+    depthMin: z.number().int().min(1).max(10),
+    depthMax: z.number().int().min(1).max(10),
+    queryIntervalMin: z.number().int().min(1),
+    queryIntervalMax: z.number().int().min(1),
+    durationMin: z.number().int().min(1),
+    durationMax: z.number().int().min(1),
+    useMobile: z.boolean(),
+    useDesktop: z.boolean()
+})
+
+const QueryEngineSchema = z.enum([
+    'china',
+    'google',
+    'wikipedia',
+    'reddit',
+    'local',
+    'hackernews',
+    'github',
+    'stackoverflow',
+    'juejin',
+    'v2ex',
+    'segmentfault',
+    'oschina',
+    'infoq',
+    'csdn',
+    'cnblogs',
+    'zhihu'
+])
 
 // Webhook
 const WebhookSchema = z.object({
@@ -60,7 +89,8 @@ export const ConfigSchema = z.object({
         doDesktopSearch: z.boolean(),
         doMobileSearch: z.boolean(),
         doDailyCheckIn: z.boolean(),
-        doReadToEarn: z.boolean()
+        doReadToEarn: z.boolean(),
+        doContinuousSearch: z.boolean()
     }),
     searchOnBingLocalQueries: z.boolean(),
     globalTimeout: NumberOrString,
@@ -73,6 +103,7 @@ export const ConfigSchema = z.object({
         searchDelay: DelaySchema,
         readDelay: DelaySchema
     }),
+    continuousSearch: ContinuousSearchSchema,
     debugLogs: z.boolean(),
     proxy: z.object({
         queryEngine: z.boolean()

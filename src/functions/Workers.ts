@@ -176,7 +176,7 @@ export class Workers {
 
     public async doPunchCards(data: DashboardData, page: Page) {
         const punchCards: PunchCard[] =
-            data.punchCards.filter(x => !x.parentPromotion.complete && x.parentPromotion.pointProgressMax > 0) ?? []
+            data.punchCards.filter(x => x.parentPromotion && !x.parentPromotion.complete && x.parentPromotion.pointProgressMax > 0) ?? []
 
         const punchCardActivities = punchCards.flatMap(x => x.childPromotions)
 

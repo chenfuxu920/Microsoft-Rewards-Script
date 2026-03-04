@@ -8,13 +8,30 @@ export interface Config {
     searchOnBingLocalQueries: boolean
     globalTimeout: number | string
     searchSettings: ConfigSearchSettings
+    continuousSearch: ConfigContinuousSearch
     debugLogs: boolean
     proxy: ConfigProxy
     consoleLogFilter: LogFilter
     webhook: ConfigWebhook
 }
 
-export type QueryEngine = 'china' | 'google' | 'wikipedia' | 'reddit' | 'local'
+export type QueryEngine = 
+    | 'china' 
+    | 'google' 
+    | 'wikipedia' 
+    | 'reddit' 
+    | 'local'
+    | 'hackernews'
+    | 'github'
+    | 'stackoverflow'
+    | 'juejin'
+    | 'v2ex'
+    | 'segmentfault'
+    | 'oschina'
+    | 'infoq'
+    | 'csdn'
+    | 'cnblogs'
+    | 'zhihu'
 
 export interface ConfigSearchSettings {
     scrollRandomResults: boolean
@@ -45,6 +62,19 @@ export interface ConfigWorkers {
     doMobileSearch: boolean
     doDailyCheckIn: boolean
     doReadToEarn: boolean
+    doContinuousSearch: boolean
+}
+
+export interface ConfigContinuousSearch {
+    enabled: boolean
+    depthMin: number
+    depthMax: number
+    queryIntervalMin: number
+    queryIntervalMax: number
+    durationMin: number
+    durationMax: number
+    useMobile: boolean
+    useDesktop: boolean
 }
 
 // Webhooks

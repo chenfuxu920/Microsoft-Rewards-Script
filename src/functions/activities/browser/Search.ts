@@ -53,14 +53,13 @@ export class Search extends Workers {
                 `通过QueryCore解析搜索查询 | locale=${locale} | lang=${langCode} | related=true`
             )
 
-            // 根据地区选择查询方式，如果是CN地区则使用中国热搜
+            // 使用默认逻辑：优先编程技术源，不足时补充国内热词榜
+            // 如需自定义数据源，可设置 sourceOrder 参数
             let queries = await queryCore.queryManager({
                 shuffle: true,
                 related: true,
                 langCode,
-                geoLocale: locale,
-                // sourceOrder: ['google', 'wikipedia', 'reddit', 'local']
-                sourceOrder: ['china','local']
+                geoLocale: locale
             })
 
             queries = [...new Set(queries.map(q => q.trim()).filter(Boolean))]
@@ -71,9 +70,25 @@ export class Search extends Workers {
             const targetUrl = this.searchPageURL ? this.searchPageURL : this.bingHome
             this.bot.logger.debug(isMobile, 'SEARCH-BING', `导航到搜索页面 | url=${targetUrl}`)
 
-            await page.goto(targetUrl)
-            await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
-            await this.bot.browser.utils.tryDismissAllMessages(page)
+            const maxNavigateRetries = 3
+            for (let retry = 0; retry < maxNavigateRetries; retry++) {
+                try {
+                    await page.goto(targetUrl, { timeout: 30000 })
+                    await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+                    await this.bot.browser.utils.tryDismissAllMessages(page)
+                    break
+                } catch (error) {
+                    if (retry >= maxNavigateRetries - 1) {
+                        throw error
+                    }
+                    this.bot.logger.warn(
+                        isMobile,
+                        'SEARCH-BING',
+                        `导航到搜索页面失败，重试中 | attempt=${retry + 1}/${maxNavigateRetries} | error=${error instanceof Error ? error.message : String(error)}`
+                    )
+                    await this.bot.utils.wait(3000)
+                }
+            }
 
             let stagnantLoop = 0
             const stagnantLoopMax = 10
@@ -142,12 +157,14 @@ export class Search extends Workers {
                         `在仍有积分缺失的情况下查询缓冲区过低，重新生成 | remainingQueries=${remainingQueries} | missing=${missingPointsTotal}`
                     )
 
+                    // 如果配置了 queryEngines 则使用配置，否则使用默认逻辑
+                    const configuredEngines = this.bot.config.searchSettings.queryEngines
                     const extra = await queryCore.queryManager({
                         shuffle: true,
                         related: true,
                         langCode,
                         geoLocale: locale,
-                        sourceOrder: this.bot.config.searchSettings.queryEngines
+                        ...(configuredEngines.length > 0 ? { sourceOrder: configuredEngines } : {})
                     })
 
                     const merged = [...queries, ...extra].map(q => q.trim()).filter(Boolean)
@@ -169,12 +186,14 @@ export class Search extends Workers {
                 const stagnantLoopMax = 5
 
                 while (missingPointsTotal > 0) {
+                    // 如果配置了 queryEngines 则使用配置，否则使用默认逻辑
+                    const configuredEngines = this.bot.config.searchSettings.queryEngines
                     const extra = await queryCore.queryManager({
                         shuffle: true,
                         related: true,
                         langCode,
                         geoLocale: locale,
-                        sourceOrder: this.bot.config.searchSettings.queryEngines
+                        ...(configuredEngines.length > 0 ? { sourceOrder: configuredEngines } : {})
                     })
 
                     const merged = [...queries, ...extra].map(q => q.trim()).filter(Boolean)
@@ -291,7 +310,28 @@ export class Search extends Workers {
             const cvid = randomBytes(16).toString('hex')
             const url = `${this.bingHome}/search?q=${encodeURIComponent(query)}&PC=U531&FORM=ANNTA1&cvid=${cvid}`
 
-            await searchPage.goto(url)
+            const maxRetries = 3
+            for (let retry = 0; retry < maxRetries; retry++) {
+                try {
+                    await searchPage.goto(url, { timeout: 30000 })
+                    break
+                } catch (error) {
+                    if (retry >= maxRetries - 1) {
+                        this.bot.logger.error(
+                            isMobile,
+                            'SEARCH-BING',
+                            `刷新主页导航失败 | attempt=${retry + 1}/${maxRetries} | error=${error instanceof Error ? error.message : String(error)}`
+                        )
+                        throw error
+                    }
+                    this.bot.logger.warn(
+                        isMobile,
+                        'SEARCH-BING',
+                        `刷新主页导航失败，重试中 | attempt=${retry + 1}/${maxRetries} | error=${error instanceof Error ? error.message : String(error)}`
+                    )
+                    await this.bot.utils.wait(3000)
+                }
+            }
             await searchPage.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
             await this.bot.browser.utils.tryDismissAllMessages(searchPage)
         }
