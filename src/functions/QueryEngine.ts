@@ -490,7 +490,7 @@ export class QueryCore {
     async getBingTrendingTopics(langCode = 'zh'): Promise<string[]> {
         try {
             const request: AxiosRequestConfig = {
-                url: `https://www.bing.com/api/v7/news/trendingtopics?appid=91B36E34F9D1B900E54E85A77CF11FB3BE5279E6&cc=xl&setlang=${langCode}`,
+                url: `https://cn.bing.com/api/v7/news/trendingtopics?appid=91B36E34F9D1B900E54E85A77CF11FB3BE5279E6&cc=xl&setlang=${langCode}`,
                 method: 'GET',
                 headers: {
                     Authorization: `Bearer ${this.bot.accessToken}`,

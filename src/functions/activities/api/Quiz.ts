@@ -76,7 +76,7 @@ export class Quiz extends Workers {
                         }
 
                         const request: AxiosRequestConfig = {
-                            url: 'https://www.bing.com/bingqa/ReportActivity?ajaxreq=1',
+                            url: 'https://cn.bing.com/bingqa/ReportActivity?ajaxreq=1',
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
