@@ -1,181 +1,271 @@
-# 微软奖励脚本
-自动化的微软奖励脚本，这次使用 TypeScript、Cheerio 和 Playwright 编写。
+[![Discord](https://img.shields.io/badge/Join%20Our%20Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/8BxYbV4pkj)
+[![Latest Build](https://img.shields.io/github/actions/workflow/status/TheNetsky/Microsoft-Rewards-Script/auto-release.yml?branch=v3&style=for-the-badge&label=Latest%20Build)](https://github.com/TheNetsky/Microsoft-Rewards-Script/actions/workflows/auto-release.yml)
+[![Docker](https://img.shields.io/badge/Docker-GHCR-blue?style=for-the-badge&logo=docker)](https://github.com/TheNetsky/Microsoft-Rewards-Script/pkgs/container/microsoft-rewards-script)
 
-该项目来源于https://github.com/TheNetsky/Microsoft-Rewards-Script ，感谢原作者的付出
+> [!CAUTION]
+> V3.x does not support the new Bing Rewards interface!
+>
+> Use at your own risk — some features may not work as expected.
 
-本项目不定时同步原项目代码，主要内容为本地化处理，主要针对的是国内用户无法访问外网google和输出日志简单翻译等问题，并在原有基础上完善功能。若有侵权请联系我删除。
+---
 
-本项目所有改动基于win11系统和docker环境。其他系统未测试，请根据原项目相关配置设置。
+## Table of Contents
 
-# 同步原项目时间
-2026年2月25日16:03:42
+- [Quick Setup](#quick-setup)
+- [Nix Setup](#nix-setup)
+- [Configuration Options](#configuration-options)
+- [Account Setup](#account-setup)
+- [Troubleshooting](#troubleshooting)
+- [Disclaimer](#disclaimer)
 
+---
 
-# window环境 #
-## 如何自动设置 ##
-1. 下载或克隆源代码
-2. win系统运行setup.bat部署环境（若使用setup.bat报错，请参考手动设置）
-3. 在dist目录 `accounts.json`添加你的账户信息
-4. 按照你的喜好修改dist目录 `config.json` 文件
-5. 运行 `npm start`或运行 `run.bat` 启动构建好的脚本
-## 如何手动设置 ##
-1. 下载或克隆源代码
-2. 下载安装nodejs 24和npm环境
-3. 运行 `npm install` 安装依赖包
-4. 若Error: browserType.launch: Executable doesn't exist报错执行 npx patchright install chromium
-5. 将 `accounts.example.json` 重命名为 `accounts.json`，并添加你的账户信息
-6. 按照你的喜好修改 `config.json` 文件
-7. 运行 `npm run pre-build` 预构建脚本
-8. 运行 `npm run build` 构建脚本
-9. 运行 `npm start` 启动构建好的脚本
+## Quick Setup
 
+### Bare metal
 
-# Docker环境 #
-1. 下载或克隆源代码
-2. 确保`config.json`内的 `headless`设置为`true`
-3. 编辑`compose.yaml` 
-* 设置时区`TZ` 
-* 设置调度`CRON_SCHEDULE` （默认为每天7点执行一次）
-* 保持`RUN_ON_START=true`
-4. 启动容器
-~~~
-docker compose up -d 
-~~~
+**Requirements:** Node.js >= 24 and Git  
+Works on Windows, Linux, macOS, and WSL.
 
-## 注意事项 ##
-- 如果出现无法自动登录情况，请在代码执行登录过程中手动完成网页的登录，等待代码自动完成剩下流程。登录信息保存在sessions目录（需要多备份），后续运行根据该目录的会话文件来运行。
-- 复制或重命名 `src/accounts.example.json` 为 `src/accounts.json` 并添加您的凭据
-- 复制或重命名 `src/config.example.json` 为 `src/config.json` 并自定义您的偏好。
-- 不要跳过此步骤。之前的 accounts.json 和 config.json 版本与当前版本不兼容。
-- 您必须在对 accounts.json 和 config.json 进行任何更改后重新构建脚本。
+#### Get the script
 
-## 配置参考
+```bash
+git clone https://github.com/TheNetsky/Microsoft-Rewards-Script.git
+cd Microsoft-Rewards-Script
+```
 
-编辑 `src/config.json` 以自定义行为。
-以下是关键配置部分的摘要。
+Or, download the latest release ZIP and extract it.
 
-### Core / 核心
-| 设置 | 描述 | 默认值 |
-|----------|-------------|----------|
-| `baseURL` | Microsoft Rewards base URL | `https://rewards.bing.com` |
-| `sessionPath` | 用于存储浏览器会话的文件夹 | `sessions` |
-| `headless` | 在后台运行浏览器 | `false`（可见） |
-| `dryRun` | 模拟执行而不运行任务 | `false` |
-| `parallel` | 同时运行移动/桌面任务 | `true` |
-| `runOnZeroPoints` | 在没有可用积分时继续 | `false` |
-| `clusters` | 并发账户实例数 | `1` |
+#### Create an account.json and config.json
 
+Copy, rename, and edit your account and configuration files before deploying the script.
 
-### Fingerprinting / 指纹识别
-| 设置 | 描述 | 默认值 |
-|---------|-------------|---------|
-| `saveFingerprint.mobile` | 重用移动浏览器指纹 | `false` |
-| `saveFingerprint.desktop` | 重用桌面浏览器指纹 | `false` |
+- Copy or rename `src/accounts.example.json` to `src/accounts.json` and add your credentials
+- Copy or rename `src/config.example.json` to `src/config.json` and customize your preferences.
 
+> [!CAUTION]
+> Do not skip this step.
+> Prior versions of accounts.json and config.json are not compatible with current release.
 
-### Job State / 任务状态
-| 设置 | 描述 | 默认值 |
-|---------|-------------|---------|
-| `workers.doDailySet` | 完成每日集活动 | `true` |
-| `workers.doMorePromotions` | 完成促销优惠 | `true` |
-| `workers.doPunchCards` | 完成打卡活动 | `true` |
-| `workers.doDesktopSearch` | 执行桌面搜索 | `true` |
-| `workers.doMobileSearch` | 执行移动搜索 | `true` |
-| `workers.doDailyCheckIn` | 完成每日签到 | `true` |
-| `workers.doReadToEarn` | 完成阅读赚取活动 | `true` |
+> [!WARNING]
+> You must rebuild your script after making any changes to accounts.json and config.json.
 
-### Search / 搜索
-| 设置 | 描述 | 默认值 |
-|---------|-------------|---------|
-| `searchOnBingLocalQueries` | 使用本地查询 vs. 获取的查询 | `false` |
-| `searchSettings.useGeoLocaleQueries` | 生成基于位置的查询 | `false` |
-| `searchSettings.scrollRandomResults` | 随机滚动搜索结果 | `true` |
-| `searchSettings.clickRandomResults` | 点击随机结果链接 | `true` |
-| `searchSettings.searchDelay` | 搜索之间的延迟（最小/最大） | `3-5 分钟` |
-| `searchSettings.retryMobileSearchAmount` | 移动搜索重试次数 | `2` |
+#### Build and run the script (bare metal version)
 
+```bash
+npm run pre-build
+npm run build
+npm run start
+```
 
-### Humanization / 人性化
-| 设置 | 描述 | 默认值 |
-|----------|-------------|----------|
-| `humanization.enabled` | 启用人类行为 | `true` |
-| `stopOnBan` | 封禁时立即停止 | `true` |
-| `immediateBanAlert` | 被封禁时立即提醒 | `true` |
-| `actionDelay.min` | 每个操作的最小延迟(毫秒) | `500` |
-| `actionDelay.max` | 每个操作的最大延迟(毫秒) | `2200` |
-| `gestureMoveProb` | 随机鼠标移动几率 | `0.65` |
-| `gestureScrollProb` | 随机滚动几率 | `0.4` |
+### Docker
 
-### 高级设置
-| 设置 | 描述 | 默认值 |
-|---------|-------------|---------|
-| `globalTimeout` | 操作超时持续时间 | `30s` |
-| `logExcludeFunc` | 从日志中排除的函数 | `SEARCH-CLOSE-TABS` |
-| `webhookLogExcludeFunc` | 从 webhooks 中排除的函数 | `SEARCH-CLOSE-TABS` |
-| `proxy.proxyGoogleTrends` | 代理 Google Trends 请求 | `true` |
-| `proxy.proxyBingTerms` | 代理 Bing Terms 请求 | `true` |
+- Copy the sample [`compose.yaml`](compose.yaml)
+- Copy and rename [`env.example`](env.example) to `.env` and add your account credentials:
 
-### Webhook 设置
-| 设置 | 描述 | 默认值 |
-|---------|-------------|---------|
-| `webhook.enabled` | 启用 Discord 通知 | `false` |
-| `webhook.url` | Discord webhook URL | `null` |
-| `conclusionWebhook.enabled` | 启用仅摘要 webhook | `false` |
-| `conclusionWebhook.url` | 摘要 webhook URL | `null` |
+```env
+ACCOUNT_1_EMAIL=you@example.com
+ACCOUNT_1_PASSWORD=your_password
+```
 
+> [!NOTE]
+> A valid `accounts.json` is automatically created based on these values, and saved locally to `./config/`
 
-## ✨ 功能
+- Review `compose.yaml` to adjust scheduling, timezone, and config options.
 
-**账户管理：**
-- ✅ 多账户支持
-- ✅ 会话存储与持久化
-- ✅ 2FA 支持
-- ✅ 无密码登录支持
+> [!NOTE]
+> A valid `config.json` is auto-generated on first run using default values, and saved locally to `./config/`.
+> Optionally, use `CONFIG_*` variables in the `environment:` section of the `compose.yaml` to customise your options (e.g., clusters, webhook).
+> Commonly changed values are included in the sample `compose.yaml`, and a full list of configuration options are in [the table below](#configuration-options).
+> Custom config values set in the `compose.yaml` are applied on every startup and always take precedence over `./config/config.json`.
 
-**自动化与控制：**
-- ✅ 无头浏览器操作
-- ✅ 集群支持（同时多个账户）
-- ✅ 可配置任务选择
-- ✅ 代理支持
-- ✅ 自动调度（Docker）
+> [!TIP]
+> If a new image adds config options you're missing, a warning will appear in the container logs.
+> To update, delete `./config/config.json` and restart, a fresh one will be generated from the latest example, with your `compose.yaml` overrides re-applied.
 
-**搜索与活动：**
-- ✅ 桌面与移动搜索
-- ✅ Microsoft Edge 搜索模拟
-- ✅ 地理定位搜索查询
-- ✅ 模拟滚动与链接点击
-- ✅ 每日集完成
-- ✅ 促销活动
-- ✅ 打卡完成
-- ✅ 每日签到
-- ✅ 阅读赚取活动
+- Start the container: `docker compose up -d`
 
-**测验与互动内容：**
-- ✅ 测验解答（10 分与 30-40 分变体）
-- ✅ 此或彼测验（随机答案）
-- ✅ ABC 测验解答
-- ✅ 投票完成
-- ✅ 点击奖励
+> [!TIP]
+> Monitor logs with `docker logs microsoft-rewards-script`, useful for viewing passwordless login codes or diagnosing issues.
+> You can also enable a webhook in `compose.yaml` for notifications.
 
-**通知与监控：**
-- ✅ Discord Webhook 集成
-- ✅ 专用摘要 Webhook
-- ✅ 全面日志记录
-- ✅ Docker 支持与监控
+---
 
+## Nix Setup
 
-## 更新日志 ##
-1. 添加了移动端的活动领取-2025年6月24日
-2. 添加了中文热搜内容-2025年6月25日
-3. ~~优化大量随机性，优化模拟人类操作-2025年7月3日~~
-4. 允许useLocale设置自定义地区-2025年7月10日
-5. 添加了日志本地保存功能-2025年7月26日
-6. 由于pnpm依赖导致无法编译问题，项目暂时改回使用npm管理-2025年11月11日
-7. 补充docker的运行方式-2025年11月11日
+If using Nix: `bash scripts/nix/run.sh`
 
-## ⚠️ 免责声明
+---
 
-**风险自负！** 使用自动化脚本时，您的 Microsoft Rewards 账户可能会被暂停或禁止。
+## Configuration Options
 
-此脚本仅供教育目的。作者对 Microsoft 采取的任何账户操作不承担责任。
+Edit `config.json` to customize behavior, or set `CONFIG_*` environment variables in `compose.yaml` (Docker). Below are all currently available options.
 
+> [!WARNING]
+> Rebuild the script (bare metal), or recreate the container (Docker) after all config changes.
+
+### Core
+
+| Setting                    | Type    | Default                      | Description                           | Docker environment variable   |
+| -------------------------- | ------- | ---------------------------- | ------------------------------------- | ----------------------------- |
+| `baseURL`                  | string  | `"https://rewards.bing.com"` | Microsoft Rewards base URL            |                               |
+| `sessionPath`              | string  | `"sessions"`                 | Directory to store browser sessions   |                               |
+| `headless`                 | boolean | `false`                      | Run browser invisibly                 | Always `true` in Docker       |
+| `clusters`                 | number  | `1`                          | Number of concurrent account clusters | `CONFIG_CLUSTERS`             |
+| `errorDiagnostics`         | boolean | `false`                      | Enable error diagnostics              | `CONFIG_ERROR_DIAGNOSTICS`    |
+| `searchOnBingLocalQueries` | boolean | `false`                      | Use local query list                  | `CONFIG_SEARCH_ON_BING_LOCAL` |
+| `globalTimeout`            | string  | `"30sec"`                    | Timeout for all actions               | `CONFIG_GLOBAL_TIMEOUT`       |
+
+### Workers
+
+| Setting                       | Type    | Default | Description                 | Docker environment variable        |
+| ----------------------------- | ------- | ------- | --------------------------- | ---------------------------------- |
+| `workers.doDailySet`          | boolean | `true`  | Complete daily set          | `CONFIG_WORKER_DAILY_SET`          |
+| `workers.doSpecialPromotions` | boolean | `true`  | Complete special promotions | `CONFIG_WORKER_SPECIAL_PROMOTIONS` |
+| `workers.doMorePromotions`    | boolean | `true`  | Complete more promotions    | `CONFIG_WORKER_MORE_PROMOTIONS`    |
+| `workers.doPunchCards`        | boolean | `true`  | Complete punchcards         | `CONFIG_WORKER_PUNCH_CARDS`        |
+| `workers.doAppPromotions`     | boolean | `true`  | Complete app promotions     | `CONFIG_WORKER_APP_PROMOTIONS`     |
+| `workers.doDesktopSearch`     | boolean | `true`  | Perform desktop searches    | `CONFIG_WORKER_DESKTOP_SEARCH`     |
+| `workers.doMobileSearch`      | boolean | `true`  | Perform mobile searches     | `CONFIG_WORKER_MOBILE_SEARCH`      |
+| `workers.doDailyCheckIn`      | boolean | `true`  | Complete daily check-in     | `CONFIG_WORKER_DAILY_CHECKIN`      |
+| `workers.doReadToEarn`        | boolean | `true`  | Complete Read-to-Earn       | `CONFIG_WORKER_READ_TO_EARN`       |
+
+### Search Settings
+
+| Setting                                | Type     | Default                                      | Description                         | Docker environment variable    |
+| -------------------------------------- | -------- | -------------------------------------------- | ----------------------------------- | ------------------------------ |
+| `searchSettings.scrollRandomResults`   | boolean  | `false`                                      | Scroll randomly on results          | `CONFIG_SEARCH_SCROLL_RANDOM`  |
+| `searchSettings.clickRandomResults`    | boolean  | `false`                                      | Click random links                  | `CONFIG_SEARCH_CLICK_RANDOM`   |
+| `searchSettings.parallelSearching`     | boolean  | `true`                                       | Run searches in parallel            | `CONFIG_SEARCH_PARALLEL`       |
+| `searchSettings.queryEngines`          | string[] | `["google", "wikipedia", "reddit", "local"]` | Query engines to use                |                                |
+| `searchSettings.searchResultVisitTime` | string   | `"10sec"`                                    | Time to spend on each search result | `CONFIG_SEARCH_VISIT_TIME`     |
+| `searchSettings.searchDelay.min`       | string   | `"30sec"`                                    | Minimum delay between searches      | `CONFIG_SEARCH_DELAY_MIN`      |
+| `searchSettings.searchDelay.max`       | string   | `"1min"`                                     | Maximum delay between searches      | `CONFIG_SEARCH_DELAY_MAX`      |
+| `searchSettings.readDelay.min`         | string   | `"30sec"`                                    | Minimum delay for reading           | `CONFIG_SEARCH_READ_DELAY_MIN` |
+| `searchSettings.readDelay.max`         | string   | `"1min"`                                     | Maximum delay for reading           | `CONFIG_SEARCH_READ_DELAY_MAX` |
+
+### Logging
+
+| Setting                          | Type     | Default                | Description                       | Docker environment variable    |
+| -------------------------------- | -------- | ---------------------- | --------------------------------- | ------------------------------ |
+| `debugLogs`                      | boolean  | `false`                | Enable debug logging              | `CONFIG_DEBUG_LOGS`            |
+| `consoleLogFilter.enabled`       | boolean  | `false`                | Enable console log filtering      | `CONFIG_LOG_FILTER_ENABLED`    |
+| `consoleLogFilter.mode`          | string   | `"whitelist"`          | Filter mode (whitelist/blacklist) | `CONFIG_LOG_FILTER_MODE`       |
+| `consoleLogFilter.levels`        | string[] | `["error", "warn"]`    | Log levels to filter              | `CONFIG_LOG_FILTER_LEVELS`\*   |
+| `consoleLogFilter.keywords`      | string[] | `["starting account"]` | Keywords to filter                | `CONFIG_LOG_FILTER_KEYWORDS`\* |
+| `consoleLogFilter.regexPatterns` | string[] | `[]`                   | Regex patterns for filtering      |                                |
+
+> [!NOTE] \* Docker `CONFIG_*` array values are comma-separated strings e.g. `"error,warn"`
+> Regex pattenrs must be entered directly in the `config.yaml`
+
+### Proxy
+
+| Setting             | Type    | Default | Description                 | Docker environment variable |
+| ------------------- | ------- | ------- | --------------------------- | --------------------------- |
+| `proxy.queryEngine` | boolean | `true`  | Proxy query engine requests | `CONFIG_PROXY_QUERY_ENGINE` |
+
+### Webhooks
+
+| Setting                                  | Type     | Default                                              | Description                       | Docker environment variable             |
+| ---------------------------------------- | -------- | ---------------------------------------------------- | --------------------------------- | --------------------------------------- |
+| `webhook.discord.enabled`                | boolean  | `false`                                              | Enable Discord webhook            | `CONFIG_DISCORD_ENABLED`                |
+| `webhook.discord.url`                    | string   | `""`                                                 | Discord webhook URL               | `CONFIG_DISCORD_URL`                    |
+| `webhook.ntfy.enabled`                   | boolean  | `false`                                              | Enable ntfy notifications         | `CONFIG_NTFY_ENABLED`                   |
+| `webhook.ntfy.url`                       | string   | `""`                                                 | ntfy server URL                   | `CONFIG_NTFY_URL`                       |
+| `webhook.ntfy.topic`                     | string   | `""`                                                 | ntfy topic                        | `CONFIG_NTFY_TOPIC`                     |
+| `webhook.ntfy.token`                     | string   | `""`                                                 | ntfy authentication token         | `CONFIG_NTFY_TOKEN`                     |
+| `webhook.ntfy.title`                     | string   | `"Microsoft-Rewards-Script"`                         | Notification title                | `CONFIG_NTFY_TITLE`                     |
+| `webhook.ntfy.tags`                      | string[] | `["bot", "notify"]`                                  | Notification tags                 | `CONFIG_NTFY_TAGS` \*                   |
+| `webhook.ntfy.priority`                  | number   | `3`                                                  | Notification priority (1-5)       | `CONFIG_NTFY_PRIORITY`                  |
+| `webhook.webhookLogFilter.enabled`       | boolean  | `false`                                              | Enable webhook log filtering      | `CONFIG_WEBHOOK_LOG_FILTER_ENABLED`     |
+| `webhook.webhookLogFilter.mode`          | string   | `"whitelist"`                                        | Filter mode (whitelist/blacklist) | `CONFIG_WEBHOOK_LOG_FILTER_MODE`        |
+| `webhook.webhookLogFilter.levels`        | string[] | `["error"]`                                          | Log levels to send                | `CONFIG_WEBHOOK_LOG_FILTER_LEVELS` \*   |
+| `webhook.webhookLogFilter.keywords`      | string[] | `["starting account", "select number", "collected"]` | Keywords to filter                | `CONFIG_WEBHOOK_LOG_FILTER_KEYWORDS` \* |
+| `webhook.webhookLogFilter.regexPatterns` | string[] | `[]`                                                 | Regex patterns for filtering      |                                         |
+
+> [!NOTE] \* Docker `CONFIG_*` array values are comma-separated strings e.g. `"error,warn"`
+> Regex pattenrs must be entered directly in the `config.yaml`
+
+> [!WARNING]
+> **NTFY** users set the `webhookLogFilter` to `enabled`, or you will receive push notifications for _all_ logs.
+> When enabled, only account start, 2FA codes, and account completion summaries are delivered as push notifications.
+> Customize which notifications you receive with the `keywords` options.
+
+---
+
+## Account Setup
+
+Edit `src/accounts.json`.
+
+> [!TIP]
+> Docker users can set account details directly in the `compose.yaml`, using a `.env` is recommended for sensitive information.
+> Docker will automatically create a valid `accounts.json` on container creation, and save the file in `./config/`
+
+> [!WARNING]
+> The file is a **flat array** of accounts, not `{ "accounts": [ ... ] }`.
+> Rebuild the script after all changes.
+
+```json
+[
+    {
+        "email": "email_1",
+        "password": "password_1",
+        "totpSecret": "",
+        "recoveryEmail": "",
+        "geoLocale": "auto",
+        "langCode": "en",
+        "proxy": {
+            "proxyAxios": false,
+            "url": "",
+            "port": 0,
+            "username": "",
+            "password": ""
+        },
+        "saveFingerprint": {
+            "mobile": false,
+            "desktop": false
+        }
+    },
+    {
+        "email": "email_2",
+        "password": "password_2",
+        "totpSecret": "",
+        "recoveryEmail": "",
+        "geoLocale": "auto",
+        "langCode": "en",
+        "proxy": {
+            "proxyAxios": false,
+            "url": "",
+            "port": 0,
+            "username": "",
+            "password": ""
+        },
+        "saveFingerprint": {
+            "mobile": false,
+            "desktop": false
+        }
+    }
+]
+```
+
+> [!NOTE]
+> `geoLocale` uses the default locale of your Microsoft profile. You can overwrite it here with a custom locale.
+
+> [!TIP]
+> When using 2FA login, adding your `totpSecret` will enable the script to automatically generate and enter the timed 6 digit code to login. To get your `totpSecret` in your Microsoft Security settings, click 'Manage how you sign in'. Add Authenticator app, when shown the QR code, select 'enter code manually'. Use this code in the `accounts.json`.
+
+---
+
+## Troubleshooting
+
+> [!TIP]
+> Most login issues can be fixed by deleting your /sessions folder, and redeploying the script
+
+---
+
+## Disclaimer
+
+Use at your own risk.  
+Automation of Microsoft Rewards may lead to account suspension or bans.  
+This software is provided for educational purposes only.  
+The authors are not responsible for any actions taken by Microsoft.

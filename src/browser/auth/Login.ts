@@ -78,7 +78,11 @@ export class Login {
         try {
             this.bot.logger.info(this.bot.isMobile, 'LOGIN', '开始登录流程')
 
-            await page.goto('https://www.bing.com/rewards/dashboard', { waitUntil: 'domcontentloaded' }).catch(() => {})
+            await page
+                .goto('https://rewards.bing.com/createuser?idru=%2F&userScenarioId=anonsignin', {
+                    waitUntil: 'domcontentloaded'
+                })
+                .catch(() => {})
             await this.bot.utils.wait(2000)
             await this.bot.browser.utils.reloadBadPage(page)
             await this.bot.browser.utils.disableFido(page)
@@ -660,6 +664,25 @@ export class Login {
 
                     const html = await page.content()
                     const $ = await this.bot.browser.utils.loadInCheerio(html)
+
+                    // Check which version of the dashboard is being used, disable requestToken req on new dash
+                    const isModernDashboard = $('section#dailyset').length > 0 // Only on new UI and on dashboard/overview page
+
+                    if (isModernDashboard) {
+                        this.bot.rewardsVersion = 'modern'
+
+                        this.bot.logger.warn(
+                            this.bot.isMobile,
+                            'GET-REWARD-SESSION',
+                            'Modern Rewards dashboard detected. This script version may not fully support it.'
+                        )
+
+                        this.bot.logger.warn(
+                            this.bot.isMobile,
+                            'GET-REWARD-SESSION',
+                            'RequestToken disabled for this session (expected behavior).'
+                        )
+                    }
 
                     const token =
                         $(this.selectors.requestToken).attr('value') ??
