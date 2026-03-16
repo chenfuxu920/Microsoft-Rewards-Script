@@ -9,7 +9,6 @@ import type {
     HackerNewsItem,
     GitHubTrendingRepo,
     StackOverflowResponse,
-    JuejinHotItem,
     V2EXTopic,
     SegmentFaultArticle,
     OSChinaNews,
