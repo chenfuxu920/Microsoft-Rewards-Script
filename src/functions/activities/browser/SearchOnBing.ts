@@ -146,6 +146,15 @@ export class SearchOnBing extends Workers {
 
                 await this.bot.utils.wait(500)
                 await this.bot.browser.utils.ghostClick(page, searchBar, { clickCount: 3 })
+
+                await page.evaluate(() => {
+                    const searchBox = document.querySelector('#sb_form_q') as HTMLInputElement
+                    if (searchBox) {
+                        searchBox.removeAttribute('readonly')
+                        searchBox.value = ''
+                    }
+                })
+
                 await searchBox.fill('')
 
                 await page.keyboard.type(query, { delay: 50 })

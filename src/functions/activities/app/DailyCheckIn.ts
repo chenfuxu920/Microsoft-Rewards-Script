@@ -115,10 +115,10 @@ export class DailyCheckIn extends Workers {
                 id: randomUUID(),
                 amount: 1,
                 type: type,
-                attributes: {
-                    offerid: 'Gamification_Sapphire_DailyCheckIn'
-                },
-                country: this.bot.userData.geoLocale
+                attributes: {},
+                country: this.bot.userData.geoLocale,
+                risk_context: {},
+                channel: 'SAAndroid'
             }
 
             this.bot.logger.debug(
@@ -132,12 +132,14 @@ export class DailyCheckIn extends Workers {
                 method: 'POST',
                 headers: {
                     Authorization: `Bearer ${this.bot.accessToken}`,
-                    'User-Agent':
-                        'Bing/32.5.431027001 (com.microsoft.bing; build:431027001; iOS 17.6.1) Alamofire/5.10.2',
-                    'Content-Type': 'application/json',
+                    'User-Agent': 'Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.5481.154.1 Mobile Safari/537.36 BingSapphire/32.6.2110003561',
+                    'Content-Type': 'application/json; charset=utf-8',
                     'X-Rewards-Country': this.bot.userData.geoLocale,
-                    'X-Rewards-Language': 'zh-CN',
-                    'X-Rewards-ismobile': 'true'
+                    'X-Rewards-Language': 'zh',
+                    'X-Rewards-ismobile': 'true',
+                    'X-Rewards-PartnerId': 'startapp',
+                    'X-Rewards-AppId': 'SAAndroid/32.6.2110003561',
+                    'X-Rewards-Flights': 'rwgobig'
                 },
                 data: JSON.stringify(jsonData)
             }
