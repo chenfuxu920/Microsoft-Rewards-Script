@@ -1,19 +1,72 @@
 import type { Page } from 'patchright'
 import type { MicrosoftRewardsBot } from '../index'
-import type {
+import {
     DashboardData,
     PunchCard,
     BasePromotion,
     FindClippyPromotion,
-    PurplePromotionalItem
+    PurplePromotionalItem,
+    GiveEligible,
+    State,
+    ExclusiveLockedFeature
 } from '../interface/DashboardData'
 import type { AppDashboardData } from '../interface/AppDashBoardData'
+
+interface WebPunchCard {
+    offerId: string
+    completedChildren: number
+    totalChildren: number
+}
 
 export class Workers {
     public bot: MicrosoftRewardsBot
 
     constructor(bot: MicrosoftRewardsBot) {
         this.bot = bot
+    }
+
+    private async getPunchCardsFromWeb(page: Page): Promise<WebPunchCard[]> {
+        try {
+            await page.goto('https://rewards.bing.com/earn')
+            await page.waitForLoadState('networkidle').catch(() => {})
+
+            const punchCards = await page.evaluate(() => {
+                interface LocalWebPunchCard {
+                    offerId: string
+                    completedChildren: number
+                    totalChildren: number
+                }
+                const results: LocalWebPunchCard[] = []
+                const links = document.querySelectorAll('a[href*="/earn/quest/"]')
+
+                links.forEach(link => {
+                    const href = link.getAttribute('href') || ''
+                    const match = href.match(/\/earn\/quest\/([^/]+)/)
+                    if (!match) return
+
+                    const offerId = match[1] || ''
+                    const card = link.closest('[class*="card"]') || link.parentElement?.parentElement
+                    if (!card) return
+
+                    const progressText = card.textContent?.match(/(\d+)\/(\d+)\s*个任务/)
+                    const completedChildren = progressText && progressText[1] ? parseInt(progressText[1]) : 0
+                    const totalChildren = progressText && progressText[2] ? parseInt(progressText[2]) : 0
+
+                    results.push({ offerId, completedChildren, totalChildren })
+                })
+
+                return results
+            })
+
+            return punchCards
+        } catch (error) {
+            this.bot.logger.error(
+                this.bot.isMobile,
+                'PUNCHCARD-WEB',
+                `获取网页任务数据出错: ${error instanceof Error ? error.message : String(error)}`
+            )
+            return []
+        }
     }
 
     public async doDailySet(data: DashboardData, page: Page) {
@@ -173,34 +226,92 @@ export class Workers {
     }
 
     public async doPunchCards(data: DashboardData, page: Page) {
+        const allPunchCards = (data.punchCards ?? []).filter(x => x != null)
+
+        const webPunchCards = await this.getPunchCardsFromWeb(page)
+        this.bot.logger.info(this.bot.isMobile, 'PUNCHCARD', `网页获取到 ${webPunchCards.length} 个任务`)
+
+        this.bot.logger.info(this.bot.isMobile, 'PUNCHCARD', `API返回 ${allPunchCards.length} 个 PunchCard`)
+        for (const pc of allPunchCards) {
+            if (!pc) {
+                this.bot.logger.info(this.bot.isMobile, 'PUNCHCARD', `  - [NULL 条目]`)
+                continue
+            }
+            const title = pc?.parentPromotion?.title ?? 'N/A'
+            const offerId = pc?.parentPromotion?.offerId ?? 'N/A'
+            const progress = pc?.parentPromotion?.attributes?.progress ?? 'N/A'
+            const max = pc?.parentPromotion?.attributes?.max ?? 'N/A'
+            const childrenCount = pc?.childPromotions?.length ?? 0
+            const completedChildren = pc?.childPromotions?.filter(c => c?.complete)?.length ?? 0
+            const isComplete = pc?.parentPromotion?.complete
+            this.bot.logger.info(
+                this.bot.isMobile,
+                'PUNCHCARD',
+                `  - ${title} | offerId=${offerId} | 进度=${progress}/${max} | 子任务=${completedChildren}/${childrenCount} | complete=${isComplete}`
+            )
+        }
+
+        for (const wpc of webPunchCards) {
+            this.bot.logger.info(
+                this.bot.isMobile,
+                'PUNCHCARD',
+                `  - [网页] ${wpc.offerId} | 子任务=${wpc.completedChildren}/${wpc.totalChildren}`
+            )
+        }
+
+        const apiOfferIds = new Set(allPunchCards.map(x => x?.parentPromotion?.offerId).filter(Boolean))
+        const missingFromApi = webPunchCards.filter(
+            x => !apiOfferIds.has(x.offerId) && x.completedChildren < x.totalChildren
+        )
+
+        if (missingFromApi.length > 0) {
+            this.bot.logger.info(this.bot.isMobile, 'PUNCHCARD', `发现 ${missingFromApi.length} 个API未返回的任务`)
+            for (const missing of missingFromApi) {
+                const fakePunchCard = {
+                    name: missing.offerId,
+                    parentPromotion: {
+                        name: missing.offerId,
+                        offerId: missing.offerId,
+                        title: missing.offerId,
+                        complete: false
+                    },
+                    childPromotions: []
+                } as unknown as PunchCard
+                allPunchCards.push(fakePunchCard)
+            }
+        }
+
         const punchCards =
-            data.punchCards?.filter(
-                x => !x.parentPromotion?.complete && (x.parentPromotion?.pointProgressMax ?? 0) > 0
-            ) ?? []
-
-        const punchCardActivities = punchCards.flatMap(x => x.childPromotions)
-
-        const activitiesUncompleted: BasePromotion[] =
-            punchCardActivities?.filter(x => {
-                if (x.complete) return false
-                if (x.exclusiveLockedFeatureStatus === 'locked') return false
-                if (!x.promotionType) return false
-
+            allPunchCards.filter(x => {
+                if (!x?.parentPromotion?.offerId) return false
+                const progress = parseInt(x?.parentPromotion?.attributes?.progress ?? '0')
+                const max = parseInt(x?.parentPromotion?.attributes?.max ?? '0')
+                if (max > 0 && progress >= max) return false
+                const completedChildren = x?.childPromotions?.filter(c => c?.complete)?.length ?? 0
+                const totalChildren = x?.childPromotions?.length ?? 0
+                if (totalChildren > 0 && completedChildren >= totalChildren) return false
                 return true
             }) ?? []
 
-        if (!activitiesUncompleted.length) {
+        if (!punchCards.length) {
             this.bot.logger.info(this.bot.isMobile, 'PUNCHCARD', 'All "Punch Card" items have already been completed')
             return
         }
 
-        this.bot.logger.info(
-            this.bot.isMobile,
-            'PUNCHCARD',
-            `Started solving ${activitiesUncompleted.length} "Punch Card" items`
-        )
+        this.bot.logger.info(this.bot.isMobile, 'PUNCHCARD', `Started solving ${punchCards.length} "Punch Card" items`)
 
-        await this.solveActivities(activitiesUncompleted, page)
+        for (const punchCard of punchCards) {
+            try {
+                await this.bot.activities.doPunchCard(punchCard, page)
+                await this.bot.utils.wait(this.bot.utils.randomDelay(5000, 10000))
+            } catch (error) {
+                this.bot.logger.error(
+                    this.bot.isMobile,
+                    'PUNCHCARD',
+                    `Error processing punchcard ${punchCard?.parentPromotion?.offerId ?? 'unknown'}: ${error instanceof Error ? error.message : String(error)}`
+                )
+            }
+        }
 
         this.bot.logger.info(this.bot.isMobile, 'PUNCHCARD', 'All "Punch Card" items have been completed')
     }
@@ -213,7 +324,7 @@ export class Workers {
                 const offerId = (activity as BasePromotion).offerId
                 const destinationUrl = activity.destinationUrl?.toLowerCase() ?? ''
 
-                this.bot.logger.debug(
+                this.bot.logger.info(
                     this.bot.isMobile,
                     'ACTIVITY',
                     `Processing activity | title="${activity.title}" | offerId=${offerId} | type=${type} | punchCard="${punchCard?.parentPromotion?.title ?? 'none'}"`

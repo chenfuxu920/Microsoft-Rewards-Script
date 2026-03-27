@@ -96,7 +96,7 @@ export class MicrosoftRewardsBot {
     private exitedWorkers: number[]
     private browserFactory: Browser = new Browser(this)
     private accounts: Account[]
-    private workers: Workers
+    public workers: Workers
     private login = new Login(this)
     private searchManager: SearchManager
     private queryCore: QueryCore

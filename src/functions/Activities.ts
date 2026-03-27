@@ -15,12 +15,14 @@ import { DoubleSearchPoints } from './activities/api/DoubleSearchPoints'
 // Browser
 import { SearchOnBing } from './activities/browser/SearchOnBing'
 import { Search } from './activities/browser/Search'
+import { PunchCardExecutor } from './activities/browser/PunchCardExecutor'
 
 import type {
     BasePromotion,
     DashboardData,
     FindClippyPromotion,
-    PurplePromotionalItem
+    PurplePromotionalItem,
+    PunchCard
 } from '../interface/DashboardData'
 import type { Promotion } from '../interface/AppDashBoardData'
 
@@ -99,5 +101,11 @@ export default class Activities {
     doDailyCheckIn = async (): Promise<void> => {
         const dailyCheckIn = new DailyCheckIn(this.bot)
         await dailyCheckIn.doDailyCheckIn()
+    }
+
+    // PunchCard Activities
+    doPunchCard = async (punchCard: PunchCard, page: Page): Promise<void> => {
+        const executor = new PunchCardExecutor(this.bot, page)
+        await executor.execute(punchCard)
     }
 }

@@ -50,30 +50,40 @@ export class UrlReward extends Workers {
         const offerId = promotion.offerId
         const page = this.bot.isMobile ? this.bot.mainMobilePage : this.bot.mainDesktopPage
 
-        // 1. 导航到目标URL（Bing搜索页会自动触发reportActivity完成任务）
-        const destinationUrl = promotion.destinationUrl
+        // 1. 导航到earn页面
+        this.bot.logger.info(this.bot.isMobile, 'URL-REWARD-MODERN', `导航到earn页面 | offerId=${offerId}`)
+
+        await page.goto('https://rewards.bing.com/earn', { waitUntil: 'networkidle', timeout: 30000 }).catch(() => {})
+
+        // 2. 等待offer链接渲染（RSC流式加载，需要等DOM元素出现）
+        await page.waitForSelector('a[href]', { state: 'attached', timeout: 15000 })
+
+        // 3. 通过标题定位offer卡片并点击（触发RSC POST /earn + 跳转目标URL）
         this.bot.logger.info(
             this.bot.isMobile,
             'URL-REWARD-MODERN',
-            `导航到目标URL | offerId=${offerId} | url=${destinationUrl}`
+            `点击offer卡片 | offerId=${offerId} | 标题="${promotion.title}"`
         )
 
         try {
-            await page.goto(destinationUrl, { timeout: 30000 })
-            await page.waitForLoadState('domcontentloaded', { timeout: 10000 }).catch(() => {})
-        } catch (navError) {
+            const link = page.locator('a').filter({ hasText: promotion.title }).first()
+            await link.waitFor({ state: 'visible', timeout: 10000 })
+            await link.click()
+            this.bot.logger.info(this.bot.isMobile, 'URL-REWARD-MODERN', `已点击offer卡片 | offerId=${offerId}`)
+        } catch {
             this.bot.logger.warn(
                 this.bot.isMobile,
                 'URL-REWARD-MODERN',
-                `导航失败 | offerId=${offerId} | 消息=${navError instanceof Error ? navError.message : String(navError)}`
+                `未找到offer卡片 | offerId=${offerId} | 标题="${promotion.title}"`
             )
             return false
         }
 
-        // 2. 等待reportActivity自动触发（搜索页加载时自动调用）
+        // 4. 等待目标页面加载完成
+        await page.waitForLoadState('domcontentloaded', { timeout: 10000 }).catch(() => {})
         await this.bot.utils.wait(this.bot.utils.randomDelay(5000, 8000))
 
-        // 3. 验证积分
+        // 5. 验证积分
         const newBalance = await this.bot.browser.func.getCurrentPoints()
         this.gainedPoints = newBalance - this.oldBalance
 
@@ -89,53 +99,10 @@ export class UrlReward extends Workers {
             return true
         }
 
-        // 4. 如果没积分，尝试访问earn页面点击offer卡片（触发RSC POST /earn）
-        this.bot.logger.info(
-            this.bot.isMobile,
-            'URL-REWARD-MODERN',
-            `直接访问未获得积分，尝试通过earn页面点击 | offerId=${offerId}`
-        )
-
-        try {
-            await page
-                .goto('https://rewards.bing.com/earn', { waitUntil: 'networkidle', timeout: 30000 })
-                .catch(() => {})
-
-            // 等待offer内容渲染完成（RSC页面流式加载，networkidle不保证DOM渲染完毕）
-            await page.waitForSelector('a[href*="search"]', { state: 'attached', timeout: 15000 })
-
-            // 通过标题匹配offer卡片
-            const link = page.locator(`a[href*="search"]`).filter({ hasText: promotion.title }).first()
-            await link.waitFor({ state: 'visible', timeout: 10000 })
-            await link.click()
-            this.bot.logger.info(this.bot.isMobile, 'URL-REWARD-MODERN', `已点击offer卡片 | offerId=${offerId}`)
-
-            await page.waitForLoadState('domcontentloaded', { timeout: 10000 }).catch(() => {})
-            await this.bot.utils.wait(this.bot.utils.randomDelay(5000, 8000))
-        } catch {
-            this.bot.logger.warn(this.bot.isMobile, 'URL-REWARD-MODERN', `earn页面点击失败 | offerId=${offerId}`)
-        }
-
-        // 最终验证
-        const finalBalance = await this.bot.browser.func.getCurrentPoints()
-        this.gainedPoints = finalBalance - this.oldBalance
-
-        if (this.gainedPoints > 0) {
-            this.bot.userData.currentPoints = finalBalance
-            this.bot.userData.gainedPoints = (this.bot.userData.gainedPoints ?? 0) + this.gainedPoints
-            this.bot.logger.info(
-                this.bot.isMobile,
-                'URL-REWARD-MODERN',
-                `Modern流程完成（通过earn页面） | offerId=${offerId} | 获得积分=${this.gainedPoints}`,
-                'green'
-            )
-            return true
-        }
-
         this.bot.logger.warn(
             this.bot.isMobile,
             'URL-REWARD-MODERN',
-            `Modern流程未获得积分 | offerId=${offerId} | 旧余额=${this.oldBalance} | 新余额=${finalBalance}`
+            `Modern流程未获得积分 | offerId=${offerId} | 旧余额=${this.oldBalance} | 新余额=${newBalance}`
         )
         return false
     }
