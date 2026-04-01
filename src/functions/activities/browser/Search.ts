@@ -359,6 +359,15 @@ export class Search extends Workers {
 
                 await this.bot.utils.wait(1000)
                 await this.bot.browser.utils.ghostClick(searchPage, searchBar, { clickCount: 3 })
+
+                await searchPage.evaluate(() => {
+                    const searchBox = document.querySelector('#sb_form_q') as HTMLInputElement
+                    if (searchBox) {
+                        searchBox.removeAttribute('readonly')
+                        searchBox.value = ''
+                    }
+                })
+
                 await searchBox.fill('')
 
                 await searchPage.keyboard.type(query, { delay: 50 })

@@ -110,7 +110,8 @@ export class SearchOnBing extends Workers {
                 let navigateSuccess = false
                 for (let retry = 0; retry < maxNavigateRetries; retry++) {
                     try {
-                        await this.bot.mainMobilePage.goto(url, { timeout: 30000 })
+                        const currentPage = this.bot.isMobile ? this.bot.mainMobilePage : this.bot.mainDesktopPage
+                        await currentPage.goto(url, { timeout: 30000 })
                         navigateSuccess = true
                         break
                     } catch (error) {
@@ -146,6 +147,15 @@ export class SearchOnBing extends Workers {
 
                 await this.bot.utils.wait(500)
                 await this.bot.browser.utils.ghostClick(page, searchBar, { clickCount: 3 })
+
+                await page.evaluate(() => {
+                    const searchBox = document.querySelector('#sb_form_q') as HTMLInputElement
+                    if (searchBox) {
+                        searchBox.removeAttribute('readonly')
+                        searchBox.value = ''
+                    }
+                })
+
                 await searchBox.fill('')
 
                 await page.keyboard.type(query, { delay: 50 })
@@ -293,11 +303,7 @@ export class SearchOnBing extends Workers {
                     `已加载查询配置 | 来源=本地 | 条目数=${queries.length}`
                 )
             } else {
-                this.bot.logger.debug(
-                    this.bot.isMobile,
-                    'SEARCH-ON-BING-QUERY',
-                    '从远程仓库获取查询配置'
-                )
+                this.bot.logger.debug(this.bot.isMobile, 'SEARCH-ON-BING-QUERY', '从远程仓库获取查询配置')
 
                 // 直接从仓库获取，这样用户不需要重新下载脚本来获取新活动
                 const response = await this.bot.axios.request({

@@ -585,7 +585,7 @@ export class Login {
 
     async verifyBingSession(page: Page) {
         const url =
-            'https://www.bing.com/fd/auth/signin?action=interactive&provider=windows_live_id&return_url=https%3A%2F%2Fwww.bing.com%2F'
+            'https://cn.bing.com/fd/auth/signin?action=interactive&provider=windows_live_id&return_url=https%3A%2F%2Fcn.bing.com%2F'
         const loopMax = 5
 
         this.bot.logger.info(this.bot.isMobile, 'LOGIN-BING', '验证Bing会话')

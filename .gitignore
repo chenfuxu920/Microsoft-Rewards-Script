@@ -26,3 +26,5 @@ bun.lock
 logs/
 .stfolder/
 .env
+*.har
+*.html

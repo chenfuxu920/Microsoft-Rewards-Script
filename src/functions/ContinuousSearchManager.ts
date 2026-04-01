@@ -233,6 +233,15 @@ export class ContinuousSearchManager {
 
                 await this.bot.utils.wait(1000)
                 await this.bot.browser.utils.ghostClick(page, searchBar, { clickCount: 3 })
+
+                await page.evaluate(() => {
+                    const searchBox = document.querySelector('#sb_form_q') as HTMLInputElement
+                    if (searchBox) {
+                        searchBox.removeAttribute('readonly')
+                        searchBox.value = ''
+                    }
+                })
+
                 await searchBox.fill('')
 
                 await page.keyboard.type(query, { delay: 50 })

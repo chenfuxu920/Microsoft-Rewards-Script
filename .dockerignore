@@ -11,3 +11,6 @@ note
 accounts.dev.json
 accounts.main.json
 .playwright-chromium-installed
+.本地点击url奖励.har
+.网页点击url奖励.har
+.网页完成更多任务.har

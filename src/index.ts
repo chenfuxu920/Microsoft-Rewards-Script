@@ -18,6 +18,8 @@ import { Login } from './browser/auth/Login'
 import { Workers } from './functions/Workers'
 import Activities from './functions/Activities'
 import { SearchManager } from './functions/SearchManager'
+import { QueryCore } from './functions/QueryEngine'
+import { ContinuousSearchManager } from './functions/ContinuousSearchManager'
 
 import type { Account } from './interface/Account'
 import AxiosClient from './util/Axios'
@@ -94,9 +96,11 @@ export class MicrosoftRewardsBot {
     private exitedWorkers: number[]
     private browserFactory: Browser = new Browser(this)
     private accounts: Account[]
-    private workers: Workers
+    public workers: Workers
     private login = new Login(this)
     private searchManager: SearchManager
+    private queryCore: QueryCore
+    private continuousSearchManager: ContinuousSearchManager
 
     public axios!: AxiosClient
 
@@ -115,6 +119,8 @@ export class MicrosoftRewardsBot {
         this.utils = new Utils()
         this.workers = new Workers(this)
         this.searchManager = new SearchManager(this)
+        this.queryCore = new QueryCore(this)
+        this.continuousSearchManager = new ContinuousSearchManager(this)
         this.browser = {
             func: new BrowserFunc(this),
             utils: new BrowserUtils(this)
@@ -472,6 +478,64 @@ export class MicrosoftRewardsBot {
                     'FLOW',
                     `Collected: +${collectedPoints} | Mobile: +${mobilePoints} | Desktop: +${desktopPoints} | ${accountEmail}`
                 )
+
+                if (this.config.workers.doContinuousSearch && this.config.continuousSearch.enabled) {
+                    this.logger.info('main', 'CONTINUOUS-SEARCH', `开始持续搜索阶段 | ${accountEmail}`)
+
+                    const locale = (this.userData.geoLocale ?? 'US').toUpperCase()
+                    const langCode = (this.userData.langCode ?? 'en').toLowerCase()
+
+                    const queries = await this.queryCore.queryManager({
+                        shuffle: true,
+                        related: true,
+                        langCode,
+                        geoLocale: locale
+                    })
+
+                    if (queries.length > 0) {
+                        let continuousPage = this.mainMobilePage
+                        const isMobile = this.config.continuousSearch.useMobile
+                        const useDesktop = this.config.continuousSearch.useDesktop
+
+                        let continuousSession = mobileSession
+
+                        if (!isMobile || useDesktop) {
+                            try {
+                                this.logger.info('main', 'CONTINUOUS-SEARCH', '为持续搜索创建新的浏览器会话')
+                                continuousSession = await this.browserFactory.createBrowser(account)
+                                continuousPage = await continuousSession.context.newPage()
+                            } catch (error) {
+                                this.logger.error(
+                                    'main',
+                                    'CONTINUOUS-SEARCH',
+                                    `创建持续搜索浏览器失败: ${error instanceof Error ? error.message : String(error)}`
+                                )
+                            }
+                        }
+
+                        const result = await this.continuousSearchManager.runContinuousSearch(
+                            continuousPage,
+                            isMobile,
+                            queries,
+                            continuousSession !== mobileSession ? continuousSession : undefined
+                        )
+
+                        if (continuousSession !== mobileSession && continuousSession) {
+                            try {
+                                await this.browser.func.closeBrowser(continuousSession.context, accountEmail)
+                                this.logger.debug('main', 'CONTINUOUS-SEARCH', '已关闭持续搜索浏览器')
+                            } catch {}
+                        }
+
+                        this.logger.info(
+                            'main',
+                            'CONTINUOUS-SEARCH',
+                            `持续搜索完成 | 搜索次数=${result.searchCount} | 持续时间=${(result.duration / 1000 / 60).toFixed(1)}分钟 | ${accountEmail}`
+                        )
+                    } else {
+                        this.logger.warn('main', 'CONTINUOUS-SEARCH', `无法获取搜索词，跳过持续搜索 | ${accountEmail}`)
+                    }
+                }
 
                 return {
                     initialPoints,

@@ -37,6 +37,7 @@ export class SearchManager {
 
         const doMobile = this.bot.config.workers.doMobileSearch && missingSearchPoints.mobilePoints > 0
         const doDesktop = this.bot.config.workers.doDesktopSearch && missingSearchPoints.desktopPoints > 0
+        const doDesktopActivities = this.bot.config.workers.doDesktopSearch
 
         const mobileStatus = this.bot.config.workers.doMobileSearch
             ? missingSearchPoints.mobilePoints > 0
@@ -65,11 +66,7 @@ export class SearchManager {
             const bothNoPoints = missingSearchPoints.mobilePoints <= 0 && missingSearchPoints.desktopPoints <= 0
 
             if (bothWorkersEnabled && bothNoPoints) {
-                this.bot.logger.info(
-                    'main',
-                    'SEARCH-MANAGER',
-                    '所有搜索已跳过：移动端或桌面端没有剩余积分。'
-                )
+                this.bot.logger.info('main', 'SEARCH-MANAGER', '所有搜索已跳过：移动端或桌面端没有剩余积分。')
             } else {
                 this.bot.logger.info('main', 'SEARCH-MANAGER', '没有安排搜索（已禁用或没有积分）。')
             }
@@ -90,6 +87,12 @@ export class SearchManager {
                     this.bot.logger.debug('main', 'SEARCH-MANAGER', `移动端关闭堆栈: ${error.stack}`)
                 }
             }
+
+            if (doDesktopActivities) {
+                this.bot.logger.info('main', 'SEARCH-MANAGER', '桌面端：无搜索积分，但仍尝试执行奖励任务')
+                await this.doDesktopActivitiesOnly(account, accountEmail, executionContext)
+            }
+
             return { mobilePoints: 0, desktopPoints: 0 }
         }
 
@@ -150,11 +153,7 @@ export class SearchManager {
             const searchTypes: string[] = []
 
             if (shouldDoMobile) {
-                this.bot.logger.debug(
-                    'main',
-                    'SEARCH-MANAGER',
-                    `安排移动端 | 目标=${missingSearchPoints.mobilePoints}`
-                )
+                this.bot.logger.debug('main', 'SEARCH-MANAGER', `安排移动端 | 目标=${missingSearchPoints.mobilePoints}`)
                 searchTypes.push('Mobile')
                 promises.push(
                     this.doMobileSearch(data, missingSearchPoints, mobileSession, accountEmail, executionContext).then(
@@ -184,9 +183,10 @@ export class SearchManager {
                     this.createDesktopSession(account, accountEmail)
                 )
                 this.bot.logger.info('main', 'SEARCH-MANAGER', '桌面端登录完成')
+            } else if (this.bot.config.workers.doDesktopSearch) {
+                this.bot.logger.info('main', 'SEARCH-MANAGER', '桌面端无搜索积分，稍后执行奖励任务')
             } else {
-                const reason = !this.bot.config.workers.doDesktopSearch ? 'disabled' : 'no-points'
-                this.bot.logger.info('main', 'SEARCH-MANAGER', `跳过桌面端登录 (${reason})`)
+                this.bot.logger.info('main', 'SEARCH-MANAGER', '跳过桌面端登录 (disabled)')
             }
 
             if (shouldDoDesktop && desktopSession) {
@@ -226,10 +226,13 @@ export class SearchManager {
             this.bot.logger.info(
                 'main',
                 'SEARCH-MANAGER',
-                `并行摘要 | 移动端=${mobilePoints} | 桌面端=${desktopPoints} | 总计=${
-                    mobilePoints + desktopPoints
-                }`
+                `并行摘要 | 移动端=${mobilePoints} | 桌面端=${desktopPoints} | 总计=${mobilePoints + desktopPoints}`
             )
+
+            if (!shouldDoDesktop && this.bot.config.workers.doDesktopSearch) {
+                this.bot.logger.info('main', 'SEARCH-MANAGER', '桌面端：无搜索积分，执行奖励任务')
+                await this.doDesktopActivitiesOnly(account, accountEmail, executionContext)
+            }
 
             return { mobilePoints, desktopPoints }
         } catch (error) {
@@ -294,11 +297,7 @@ export class SearchManager {
 
         if (shouldDoMobile) {
             this.bot.logger.info('main', 'SEARCH-MANAGER', '步骤 1: 移动端')
-            this.bot.logger.debug(
-                'main',
-                'SEARCH-MANAGER',
-                `串行移动端 | 目标=${missingSearchPoints.mobilePoints}`
-            )
+            this.bot.logger.debug('main', 'SEARCH-MANAGER', `串行移动端 | 目标=${missingSearchPoints.mobilePoints}`)
             mobilePoints = await this.doMobileSearch(
                 data,
                 missingSearchPoints,
@@ -330,11 +329,7 @@ export class SearchManager {
 
         if (shouldDoDesktop) {
             this.bot.logger.info('main', 'SEARCH-MANAGER', '步骤 2: 桌面端')
-            this.bot.logger.debug(
-                'main',
-                'SEARCH-MANAGER',
-                `串行桌面端 | 目标=${missingSearchPoints.desktopPoints}`
-            )
+            this.bot.logger.debug('main', 'SEARCH-MANAGER', `串行桌面端 | 目标=${missingSearchPoints.desktopPoints}`)
             desktopPoints = await this.doDesktopSearchSequential(
                 data,
                 missingSearchPoints,
@@ -343,17 +338,17 @@ export class SearchManager {
                 executionContext
             )
             this.bot.logger.info('main', 'SEARCH-MANAGER', `步骤 2: 桌面端完成 | 获得=${desktopPoints}`)
+        } else if (this.bot.config.workers.doDesktopSearch) {
+            this.bot.logger.info('main', 'SEARCH-MANAGER', '步骤 2: 桌面端无搜索积分，仍尝试执行奖励任务')
+            await this.doDesktopActivitiesOnly(account, accountEmail, executionContext)
         } else {
-            const reason = !this.bot.config.workers.doDesktopSearch ? 'disabled' : 'no-points'
-            this.bot.logger.info('main', 'SEARCH-MANAGER', `步骤 2: 跳过桌面端 (${reason})`)
+            this.bot.logger.info('main', 'SEARCH-MANAGER', '步骤 2: 跳过桌面端 (disabled)')
         }
 
         this.bot.logger.info(
             'main',
             'SEARCH-MANAGER',
-            `串行摘要 | 移动端=${mobilePoints} | 桌面端=${desktopPoints} | 总计=${
-                mobilePoints + desktopPoints
-            }`
+            `串行摘要 | 移动端=${mobilePoints} | 桌面端=${desktopPoints} | 总计=${mobilePoints + desktopPoints}`
         )
         this.bot.logger.debug('main', 'SEARCH-MANAGER', `串行完成 | 账户=${accountEmail}`)
 
@@ -388,7 +383,96 @@ export class SearchManager {
         this.bot.logger.debug('main', 'SEARCH-DESKTOP-LOGIN', 'Cookie已存储')
         this.bot.logger.info('main', 'SEARCH-DESKTOP-LOGIN', '桌面端会话就绪')
 
+        await this.doDesktopActivities()
+
         return session
+    }
+
+    private async doDesktopActivities(): Promise<void> {
+        this.bot.logger.info('main', 'DESKTOP-ACTIVITIES', '开始桌面端任务')
+
+        try {
+            const data = await this.bot.browser.func.getDashboardData()
+
+            if (this.bot.config.workers.doDailySet) {
+                await this.bot.workers.doDailySet(data, this.bot.mainDesktopPage)
+            }
+            if (this.bot.config.workers.doSpecialPromotions) {
+                await this.bot.workers.doSpecialPromotions(data)
+            }
+            if (this.bot.config.workers.doMorePromotions) {
+                await this.bot.workers.doMorePromotions(data, this.bot.mainDesktopPage)
+            }
+            if (this.bot.config.workers.doPunchCards) {
+                await this.bot.workers.doPunchCards(data, this.bot.mainDesktopPage)
+            }
+
+            this.bot.logger.info('main', 'DESKTOP-ACTIVITIES', '桌面端任务完成')
+        } catch (error) {
+            this.bot.logger.error(
+                'main',
+                'DESKTOP-ACTIVITIES',
+                `桌面端任务出错: ${error instanceof Error ? error.message : String(error)}`
+            )
+        }
+    }
+
+    private async doDesktopActivitiesOnly(
+        account: Account,
+        accountEmail: string,
+        executionContext: any
+    ): Promise<void> {
+        let desktopSession: BrowserSession | null = null
+
+        return await executionContext.run({ isMobile: false, accountEmail }, async () => {
+            try {
+                this.bot.logger.info('main', 'DESKTOP-ACTIVITIES-ONLY', '创建桌面端会话（仅任务）')
+                desktopSession = await this.bot['browserFactory'].createBrowser(account)
+                this.bot.mainDesktopPage = await desktopSession.context.newPage()
+
+                await this.bot['login'].login(this.bot.mainDesktopPage, account)
+                await this.bot['login'].verifyBingSession(this.bot.mainDesktopPage)
+                this.bot.cookies.desktop = await desktopSession.context.cookies()
+
+                this.bot.logger.info('main', 'DESKTOP-ACTIVITIES-ONLY', '桌面端会话就绪，开始执行任务')
+
+                const data = await this.bot.browser.func.getDashboardData()
+
+                if (this.bot.config.workers.doDailySet) {
+                    await this.bot.workers.doDailySet(data, this.bot.mainDesktopPage)
+                }
+                if (this.bot.config.workers.doSpecialPromotions) {
+                    await this.bot.workers.doSpecialPromotions(data)
+                }
+                if (this.bot.config.workers.doMorePromotions) {
+                    await this.bot.workers.doMorePromotions(data, this.bot.mainDesktopPage)
+                }
+                if (this.bot.config.workers.doPunchCards) {
+                    await this.bot.workers.doPunchCards(data, this.bot.mainDesktopPage)
+                }
+
+                this.bot.logger.info('main', 'DESKTOP-ACTIVITIES-ONLY', '桌面端任务完成')
+            } catch (error) {
+                this.bot.logger.error(
+                    'main',
+                    'DESKTOP-ACTIVITIES-ONLY',
+                    `桌面端任务出错: ${error instanceof Error ? error.message : String(error)}`
+                )
+            } finally {
+                if (desktopSession) {
+                    try {
+                        await this.bot.browser.func.closeBrowser(desktopSession.context, accountEmail)
+                        this.bot.logger.info('main', 'DESKTOP-ACTIVITIES-ONLY', '桌面端会话已关闭')
+                    } catch (error) {
+                        this.bot.logger.warn(
+                            'main',
+                            'DESKTOP-ACTIVITIES-ONLY',
+                            `关闭桌面端会话失败: ${error instanceof Error ? error.message : String(error)}`
+                        )
+                    }
+                }
+            }
+        })
     }
 
     private async doMobileSearch(
@@ -593,11 +677,7 @@ export class SearchManager {
             } finally {
                 if (desktopSession) {
                     this.bot.logger.info('main', 'SEARCH-DESKTOP-SEQUENTIAL', '正在关闭桌面端会话')
-                    this.bot.logger.debug(
-                        'main',
-                        'SEARCH-DESKTOP-SEQUENTIAL',
-                        `正在关闭上下文 | 账户=${accountEmail}`
-                    )
+                    this.bot.logger.debug('main', 'SEARCH-DESKTOP-SEQUENTIAL', `正在关闭上下文 | 账户=${accountEmail}`)
                     try {
                         await this.bot.browser.func.closeBrowser(desktopSession.context, accountEmail)
                         this.bot.logger.info('main', 'SEARCH-DESKTOP-SEQUENTIAL', '桌面端浏览器已关闭')

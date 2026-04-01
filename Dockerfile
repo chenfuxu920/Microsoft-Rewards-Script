@@ -23,6 +23,11 @@ COPY package.json package-lock.json tsconfig.json ./
 # Install all dependencies required to build the script
 RUN npm install --ignore-scripts --no-audit --no-fund --loglevel verbose
 
+# Install Chromium Headless Shell (before copying source to cache better)
+RUN mkdir -p /usr/src/microsoft-rewards-script/pw-browsers \
+    && npx patchright install --only-shell chromium \
+    && rm -rf /root/.cache /tmp/* /var/tmp/*
+
 # Copy source and build
 COPY . .
 RUN npm run build
@@ -31,11 +36,6 @@ RUN npm run build
 RUN rm -rf node_modules \
     && npm install --omit=dev --ignore-scripts --no-audit --no-fund --loglevel verbose \
     && npm cache clean --force
-
-# Install Chromium Headless Shell, and cleanup
-RUN mkdir -p /usr/src/microsoft-rewards-script/pw-browsers \
-    && npx patchright install --only-shell chromium \
-    && rm -rf /root/.cache /tmp/* /var/tmp/*
 
 ###############################################################################
 # Stage 2: Runtime
