@@ -24,7 +24,7 @@ sed -i 's/^#cron\.log/cron.log/' /etc/rsyslog.conf 2>/dev/null || echo "Cron log
 service rsyslog restart 2>/dev/null || echo "rsyslog restart skipped"
 
 # 确保配置文件存在
-if [ ! -f "src/accounts.json" ]; then
+if [ ! -f "dist/accounts.json" ]; then
     echo "Error: accounts.json not found. Please mount it or create it."
     exit 1
 fi
