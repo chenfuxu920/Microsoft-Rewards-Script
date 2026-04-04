@@ -17,7 +17,7 @@ export class Search extends Workers {
     /** 搜索计数器 */
     private searchCount = 0
     /** 首次滚动标志 */
-    private firstScroll: boolean = true;
+    private firstScroll: boolean = true
 
     public async doSearch(data: DashboardData, page: Page, isMobile: boolean): Promise<number> {
         const startBalance = Number(this.bot.userData.currentPoints ?? 0)
@@ -130,11 +130,7 @@ export class Search extends Workers {
                 missingPointsTotal = newMissingPointsTotal
 
                 if (missingPointsTotal === 0) {
-                    this.bot.logger.info(
-                        isMobile,
-                        'SEARCH-BING',
-                        '已获得所有必需的搜索积分，停止主搜索循环'
-                    )
+                    this.bot.logger.info(isMobile, 'SEARCH-BING', '已获得所有必需的搜索积分，停止主搜索循环')
                     break
                 }
 
@@ -200,11 +196,7 @@ export class Search extends Workers {
                     const newPool = [...new Set(merged)]
                     queries = this.bot.utils.shuffleArray(newPool)
 
-                    this.bot.logger.info(
-                        isMobile,
-                        'SEARCH-BING-EXTRA',
-                        `新搜索查询池已生成 | count=${queries.length}`
-                    )
+                    this.bot.logger.info(isMobile, 'SEARCH-BING-EXTRA', `新搜索查询池已生成 | count=${queries.length}`)
 
                     for (const query of queries) {
                         this.bot.logger.info(
@@ -337,7 +329,7 @@ export class Search extends Workers {
         }
 
         // 每次搜索重置首次滚动标志，确保有初始向下滚动
-        this.firstScroll = true;
+        this.firstScroll = true
 
         this.bot.logger.debug(
             isMobile,
@@ -433,15 +425,11 @@ export class Search extends Workers {
             }
         }
 
-        this.bot.logger.debug(
-            isMobile,
-            'SEARCH-BING',
-            `在重试失败后返回当前搜索计数器 | query="${query}"`
-        )
+        this.bot.logger.debug(isMobile, 'SEARCH-BING', `在重试失败后返回当前搜索计数器 | query="${query}"`)
 
         return await this.bot.browser.func.getSearchPoints()
     }
-  private async randomScroll(page: Page, isMobile: boolean) {
+    private async randomScroll(page: Page, isMobile: boolean) {
         try {
             const viewportHeight = await page.evaluate(() => window.innerHeight)
             const totalHeight = await page.evaluate(() => document.body.scrollHeight)
@@ -466,6 +454,7 @@ export class Search extends Workers {
     }
 
     private async clickRandomLink(page: Page, isMobile: boolean) {
+        let newTab: Page | null = null
         try {
             this.bot.logger.debug(isMobile, 'SEARCH-RANDOM-CLICK', '尝试点击随机搜索结果链接')
 
@@ -478,12 +467,13 @@ export class Search extends Workers {
                 await page.goto(searchPageUrl)
                 this.bot.logger.debug(isMobile, 'SEARCH-RANDOM-CLICK', '已返回搜索页面')
             } else {
-                const newTab = await this.bot.browser.utils.getLatestTab(page)
+                newTab = await this.bot.browser.utils.getLatestTab(page)
                 const newTabUrl = newTab.url()
 
                 this.bot.logger.debug(isMobile, 'SEARCH-RANDOM-CLICK', `已访问结果标签页 | url=${newTabUrl}`)
 
                 await this.bot.browser.utils.closeTabs(newTab)
+                newTab = null
                 this.bot.logger.debug(isMobile, 'SEARCH-RANDOM-CLICK', '已关闭结果标签页')
             }
         } catch (error) {
@@ -492,6 +482,13 @@ export class Search extends Workers {
                 'SEARCH-RANDOM-CLICK',
                 `随机点击过程中出现错误 | message=${error instanceof Error ? error.message : String(error)}`
             )
+        } finally {
+            if (newTab && !newTab.isClosed()) {
+                try {
+                    await newTab.close()
+                    this.bot.logger.debug(isMobile, 'SEARCH-RANDOM-CLICK', '清理：已关闭未关闭的标签页')
+                } catch {}
+            }
         }
     }
 }

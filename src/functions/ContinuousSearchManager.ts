@@ -39,13 +39,17 @@ export class ContinuousSearchManager {
         }
 
         this.currentSession = session ?? null
+        let continuousPage: Page | null = null
+        let pageCreated = false
 
         if (!this.currentSession && !page.isClosed()) {
             this.bot.logger.info(isMobile, 'CONTINUOUS-SEARCH', '使用现有浏览器页面执行持续搜索')
+            continuousPage = page
         } else if (this.currentSession) {
             this.bot.logger.info(isMobile, 'CONTINUOUS-SEARCH', '创建新的浏览器页面执行持续搜索')
             try {
-                page = await this.currentSession.context.newPage()
+                continuousPage = await this.currentSession.context.newPage()
+                pageCreated = true
             } catch (error) {
                 this.bot.logger.error(
                     isMobile,
@@ -73,11 +77,12 @@ export class ContinuousSearchManager {
         )
 
         const shuffledQueries = this.bot.utils.shuffleArray([...queries])
+        let duration = 0
 
         try {
-            await page.goto(this.bingHome, { timeout: 30000 })
-            await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
-            await this.bot.browser.utils.tryDismissAllMessages(page)
+            await continuousPage.goto(this.bingHome, { timeout: 30000 })
+            await continuousPage.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+            await this.bot.browser.utils.tryDismissAllMessages(continuousPage)
 
             for (const initialQuery of shuffledQueries) {
                 if (this.shouldStop()) {
@@ -101,7 +106,7 @@ export class ContinuousSearchManager {
                     `开始新的搜索链 | 查询="${initialQuery}" | 当前深度=0/${this.targetDepth}`
                 )
 
-                await this.executeSearchChain(page, initialQuery, isMobile, 0)
+                await this.executeSearchChain(continuousPage, initialQuery, isMobile, 0)
 
                 const intervalMinutes = this.getRandomInt(config.queryIntervalMin, config.queryIntervalMax)
                 this.bot.logger.info(
@@ -120,26 +125,26 @@ export class ContinuousSearchManager {
                 'CONTINUOUS-SEARCH',
                 `持续搜索出错: ${error instanceof Error ? error.message : String(error)}`
             )
-        }
+        } finally {
+            duration = Date.now() - this.startTime
+            this.bot.logger.info(
+                isMobile,
+                'CONTINUOUS-SEARCH',
+                `持续搜索完成 | 总搜索次数=${this.searchCount} | 总时长=${(duration / 1000 / 60).toFixed(1)}分钟`,
+                'green'
+            )
 
-        const duration = Date.now() - this.startTime
-        this.bot.logger.info(
-            isMobile,
-            'CONTINUOUS-SEARCH',
-            `持续搜索完成 | 总搜索次数=${this.searchCount} | 总时长=${(duration / 1000 / 60).toFixed(1)}分钟`,
-            'green'
-        )
-
-        if (this.currentSession && page && !page.isClosed()) {
-            try {
-                await page.close()
-                this.bot.logger.debug(isMobile, 'CONTINUOUS-SEARCH', '已关闭持续搜索页面')
-            } catch (error) {
-                this.bot.logger.debug(
-                    isMobile,
-                    'CONTINUOUS-SEARCH',
-                    `关闭页面时出错: ${error instanceof Error ? error.message : String(error)}`
-                )
+            if (pageCreated && continuousPage && !continuousPage.isClosed()) {
+                try {
+                    await continuousPage.close()
+                    this.bot.logger.debug(isMobile, 'CONTINUOUS-SEARCH', '已关闭持续搜索页面')
+                } catch (error) {
+                    this.bot.logger.debug(
+                        isMobile,
+                        'CONTINUOUS-SEARCH',
+                        `关闭页面时出错: ${error instanceof Error ? error.message : String(error)}`
+                    )
+                }
             }
         }
 
@@ -188,11 +193,7 @@ export class ContinuousSearchManager {
                     if (!this.usedQueries.has(normalizedNext)) {
                         this.usedQueries.add(normalizedNext)
 
-                        this.bot.logger.debug(
-                            isMobile,
-                            'CONTINUOUS-SEARCH-CHAIN',
-                            `点击关联搜索 | 文本="${nextQuery}"`
-                        )
+                        this.bot.logger.debug(isMobile, 'CONTINUOUS-SEARCH-CHAIN', `点击关联搜索 | 文本="${nextQuery}"`)
 
                         await this.bot.utils.wait(this.getRandomInt(3000, 8000))
 
@@ -307,11 +308,7 @@ export class ContinuousSearchManager {
                 }
             }
 
-            this.bot.logger.debug(
-                isMobile,
-                'CONTINUOUS-SEARCH-RELATED',
-                `找到${relatedSearches.length}个关联搜索`
-            )
+            this.bot.logger.debug(isMobile, 'CONTINUOUS-SEARCH-RELATED', `找到${relatedSearches.length}个关联搜索`)
         } catch (error) {
             this.bot.logger.warn(
                 isMobile,
@@ -323,7 +320,10 @@ export class ContinuousSearchManager {
         return relatedSearches
     }
 
-    private selectRandomRelated(relatedSearches: RelatedSearchResult[], currentQuery: string): RelatedSearchResult | null {
+    private selectRandomRelated(
+        relatedSearches: RelatedSearchResult[],
+        currentQuery: string
+    ): RelatedSearchResult | null {
         if (relatedSearches.length === 0) {
             return null
         }
@@ -372,11 +372,7 @@ export class ContinuousSearchManager {
     private async clickRandomSearchResults(page: Page, isMobile: boolean): Promise<void> {
         try {
             const clickCount = this.getRandomInt(3, 5)
-            this.bot.logger.debug(
-                isMobile,
-                'CONTINUOUS-SEARCH-RESULTS',
-                `开始点击搜索结果 | 目标点击数=${clickCount}`
-            )
+            this.bot.logger.debug(isMobile, 'CONTINUOUS-SEARCH-RESULTS', `开始点击搜索结果 | 目标点击数=${clickCount}`)
 
             const resultSelectors = isMobile
                 ? ['#b_results > li:not(.b_promote):not(.b_ans):not(.b_msg) h2 a', '#b_results h2 a', '.b_title h2 a']
@@ -433,8 +429,8 @@ export class ContinuousSearchManager {
                     }
                     const targetElement = elements[randomIndexValue]
 
-                    const href = await targetElement.getAttribute('href') || ''
-                    const title = await targetElement.textContent() || ''
+                    const href = (await targetElement.getAttribute('href')) || ''
+                    const title = (await targetElement.textContent()) || ''
 
                     await this.bot.utils.wait(this.getRandomInt(500, 1500))
 
@@ -455,7 +451,6 @@ export class ContinuousSearchManager {
 
                     await page.goBack({ waitUntil: 'domcontentloaded' }).catch(() => {})
                     await this.bot.utils.wait(this.getRandomInt(1000, 2000))
-
                 } catch (error) {
                     this.bot.logger.debug(
                         isMobile,

@@ -99,16 +99,23 @@ export class PunchCardExecutor {
         }
 
         if (await locator.isVisible()) {
-            await locator.click()
-
+            let newPage: Page | null = null
             try {
-                const newPage = await this.page.context().waitForEvent('page', { timeout: 5000 })
+                await locator.click()
+
+                newPage = await this.page.context().waitForEvent('page', { timeout: 5000 })
                 await newPage.waitForLoadState('domcontentloaded')
                 this.bot.logger.debug(this.bot.isMobile, 'PUNCHCARD-CLICK', `新标签页: ${newPage.url()}`)
                 await this.page.waitForTimeout(3000)
-                await newPage.close()
             } catch {
                 // 没有新标签页
+            } finally {
+                if (newPage && !newPage.isClosed()) {
+                    try {
+                        await newPage.close()
+                        this.bot.logger.debug(this.bot.isMobile, 'PUNCHCARD-CLICK', '已关闭新标签页')
+                    } catch {}
+                }
             }
 
             await this.page.waitForLoadState('networkidle').catch(() => {})

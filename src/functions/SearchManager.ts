@@ -147,6 +147,7 @@ export class SearchManager {
 
         let desktopSession: BrowserSession | null = null
         let mobileContextClosed = false
+        let desktopContextClosed = false
 
         try {
             const promises: Promise<number>[] = []
@@ -204,6 +205,7 @@ export class SearchManager {
                         accountEmail,
                         executionContext
                     ).then(points => {
+                        desktopContextClosed = true
                         this.bot.logger.info('main', 'SEARCH-MANAGER', `桌面端完成 | 获得=${points}`)
                         return points
                     })
@@ -263,6 +265,22 @@ export class SearchManager {
                     if (error instanceof Error && error.stack) {
                         this.bot.logger.debug('main', 'SEARCH-MANAGER', `清理移动端堆栈: ${error.stack}`)
                     }
+                }
+            }
+            if (!desktopContextClosed && desktopSession) {
+                this.bot.logger.info('main', 'SEARCH-MANAGER', '清理：正在关闭桌面端会话')
+                this.bot.logger.debug('main', 'SEARCH-MANAGER', `清理桌面端 | 账户=${accountEmail}`)
+                try {
+                    await executionContext.run({ isMobile: false, accountEmail }, async () => {
+                        await this.bot.browser.func.closeBrowser(desktopSession!.context, accountEmail)
+                    })
+                    this.bot.logger.info('main', 'SEARCH-MANAGER', '清理：桌面端会话已关闭')
+                } catch (error) {
+                    this.bot.logger.warn(
+                        'main',
+                        'SEARCH-MANAGER',
+                        `清理：桌面端关闭失败: ${error instanceof Error ? error.message : String(error)}`
+                    )
                 }
             }
         }
