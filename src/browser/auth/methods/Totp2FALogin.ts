@@ -25,24 +25,24 @@ export class TotpLogin {
 
             if (visibleInput) {
                 await visibleInput.fill(code)
-                this.bot.logger.info(this.bot.isMobile, 'LOGIN-TOTP', 'Filled TOTP input')
+                this.bot.logger.info(this.bot.isMobile, 'LOGIN-TOTP', '已填写TOTP输入')
                 return true
             }
 
             const secondairyInput = await page.$(this.secondairyInputSelector)
             if (secondairyInput) {
                 await secondairyInput.fill(code)
-                this.bot.logger.info(this.bot.isMobile, 'LOGIN-TOTP', 'Filled TOTP input')
+                this.bot.logger.info(this.bot.isMobile, 'LOGIN-TOTP', '已填写TOTP输入')
                 return true
             }
 
-            this.bot.logger.warn(this.bot.isMobile, 'LOGIN-TOTP', 'No TOTP input field found')
+            this.bot.logger.warn(this.bot.isMobile, 'LOGIN-TOTP', '未找到TOTP输入字段')
             return false
         } catch (error) {
             this.bot.logger.warn(
                 this.bot.isMobile,
                 'LOGIN-TOTP',
-                `Failed to fill TOTP input: ${error instanceof Error ? error.message : String(error)}`
+                `填写TOTP输入失败: ${error instanceof Error ? error.message : String(error)}`
             )
             return false
         }

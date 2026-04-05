@@ -76,15 +76,15 @@ export class Workers {
         const activitiesUncompleted = todayData?.filter(x => !x?.complete && x.pointProgressMax > 0) ?? []
 
         if (!activitiesUncompleted.length) {
-            this.bot.logger.info(this.bot.isMobile, 'DAILY-SET', 'All "Daily Set" items have already been completed')
+            this.bot.logger.info(this.bot.isMobile, 'DAILY-SET', '所有"每日任务"已完成')
             return
         }
 
-        this.bot.logger.info(this.bot.isMobile, 'DAILY-SET', 'Started solving "Daily Set" items')
+        this.bot.logger.info(this.bot.isMobile, 'DAILY-SET', '开始处理"每日任务"')
 
         await this.solveActivities(activitiesUncompleted, page)
 
-        this.bot.logger.info(this.bot.isMobile, 'DAILY-SET', 'All "Daily Set" items have been completed')
+        this.bot.logger.info(this.bot.isMobile, 'DAILY-SET', '所有"每日任务"已完成')
     }
 
     public async doMorePromotions(data: DashboardData, page: Page) {
@@ -107,23 +107,19 @@ export class Workers {
             }) ?? []
 
         if (!activitiesUncompleted.length) {
-            this.bot.logger.info(
-                this.bot.isMobile,
-                'MORE-PROMOTIONS',
-                'All "More Promotion" items have already been completed'
-            )
+            this.bot.logger.info(this.bot.isMobile, 'MORE-PROMOTIONS', '所有"更多促销"已完成')
             return
         }
 
         this.bot.logger.info(
             this.bot.isMobile,
             'MORE-PROMOTIONS',
-            `Started solving ${activitiesUncompleted.length} "More Promotions" items`
+            `开始处理 ${activitiesUncompleted.length} 个"更多促销"任务`
         )
 
         await this.solveActivities(activitiesUncompleted, page)
 
-        this.bot.logger.info(this.bot.isMobile, 'MORE-PROMOTIONS', 'All "More Promotion" items have been completed')
+        this.bot.logger.info(this.bot.isMobile, 'MORE-PROMOTIONS', '所有"更多促销"已完成')
     }
 
     public async doAppPromotions(data: AppDashboardData) {
@@ -137,11 +133,7 @@ export class Workers {
         })
 
         if (!appRewards.length) {
-            this.bot.logger.info(
-                this.bot.isMobile,
-                'APP-PROMOTIONS',
-                'All "App Promotions" items have already been completed'
-            )
+            this.bot.logger.info(this.bot.isMobile, 'APP-PROMOTIONS', '所有"应用促销"已完成')
             return
         }
 
@@ -151,7 +143,7 @@ export class Workers {
             await this.bot.utils.wait(this.bot.utils.randomDelay(5000, 15000))
         }
 
-        this.bot.logger.info(this.bot.isMobile, 'APP-PROMOTIONS', 'All "App Promotions" items have been completed')
+        this.bot.logger.info(this.bot.isMobile, 'APP-PROMOTIONS', '所有"应用促销"已完成')
     }
 
     public async doSpecialPromotions(data: DashboardData) {
@@ -184,7 +176,7 @@ export class Workers {
                 this.bot.logger.debug(
                     this.bot.isMobile,
                     'SPECIAL-ACTIVITY',
-                    `Processing activity | title="${activity.title}" | offerId=${offerId} | type=${type}"`
+                    `正在处理活动 | 标题="${activity.title}" | offerId=${offerId} | 类型=${type}"`
                 )
 
                 switch (type) {
@@ -195,7 +187,7 @@ export class Workers {
                             this.bot.logger.info(
                                 this.bot.isMobile,
                                 'ACTIVITY',
-                                `Found activity type "Double Search Points" | title="${activity.title}" | offerId=${offerId}`
+                                `发现活动类型"双倍搜索积分" | 标题="${activity.title}" | offerId=${offerId}`
                             )
 
                             await this.bot.activities.doDoubleSearchPoints(activity)
@@ -208,7 +200,7 @@ export class Workers {
                         this.bot.logger.warn(
                             this.bot.isMobile,
                             'SPECIAL-ACTIVITY',
-                            `Skipped activity "${activity.title}" | offerId=${offerId} | Reason: Unsupported type "${activity.promotionType}"`
+                            `跳过活动 "${activity.title}" | offerId=${offerId} | 原因: 不支持的类型 "${activity.promotionType}"`
                         )
                         break
                     }
@@ -217,12 +209,12 @@ export class Workers {
                 this.bot.logger.error(
                     this.bot.isMobile,
                     'SPECIAL-ACTIVITY',
-                    `Error while solving activity "${activity.title}" | message=${error instanceof Error ? error.message : String(error)}`
+                    `处理活动出错 "${activity.title}" | 消息=${error instanceof Error ? error.message : String(error)}`
                 )
             }
         }
 
-        this.bot.logger.info(this.bot.isMobile, 'SPECIAL-ACTIVITY', 'All "Special Activites" items have been completed')
+        this.bot.logger.info(this.bot.isMobile, 'SPECIAL-ACTIVITY', '所有"特殊活动"已完成')
     }
 
     public async doPunchCards(data: DashboardData, page: Page) {
@@ -294,11 +286,11 @@ export class Workers {
             }) ?? []
 
         if (!punchCards.length) {
-            this.bot.logger.info(this.bot.isMobile, 'PUNCHCARD', 'All "Punch Card" items have already been completed')
+            this.bot.logger.info(this.bot.isMobile, 'PUNCHCARD', '所有"打卡任务"已完成')
             return
         }
 
-        this.bot.logger.info(this.bot.isMobile, 'PUNCHCARD', `Started solving ${punchCards.length} "Punch Card" items`)
+        this.bot.logger.info(this.bot.isMobile, 'PUNCHCARD', `开始处理 ${punchCards.length} 个"打卡任务"`)
 
         for (const punchCard of punchCards) {
             try {
@@ -308,12 +300,12 @@ export class Workers {
                 this.bot.logger.error(
                     this.bot.isMobile,
                     'PUNCHCARD',
-                    `Error processing punchcard ${punchCard?.parentPromotion?.offerId ?? 'unknown'}: ${error instanceof Error ? error.message : String(error)}`
+                    `处理打卡任务出错 ${punchCard?.parentPromotion?.offerId ?? '未知'}: ${error instanceof Error ? error.message : String(error)}`
                 )
             }
         }
 
-        this.bot.logger.info(this.bot.isMobile, 'PUNCHCARD', 'All "Punch Card" items have been completed')
+        this.bot.logger.info(this.bot.isMobile, 'PUNCHCARD', '所有"打卡任务"已完成')
     }
 
     private async solveActivities(activities: BasePromotion[], page: Page, punchCard?: PunchCard) {
@@ -327,7 +319,7 @@ export class Workers {
                 this.bot.logger.info(
                     this.bot.isMobile,
                     'ACTIVITY',
-                    `Processing activity | title="${activity.title}" | offerId=${offerId} | type=${type} | punchCard="${punchCard?.parentPromotion?.title ?? 'none'}"`
+                    `正在处理活动 | 标题="${activity.title}" | offerId=${offerId} | 类型=${type} | 打卡="${punchCard?.parentPromotion?.title ?? '无'}"`
                 )
 
                 switch (type) {
@@ -340,7 +332,7 @@ export class Workers {
                             this.bot.logger.info(
                                 this.bot.isMobile,
                                 'ACTIVITY',
-                                `Found activity type "Poll" | title="${activity.title}" | offerId=${offerId}`
+                                `发现活动类型"投票" | 标题="${activity.title}" | offerId=${offerId}`
                             )
 
                             //await this.bot.activities.doPoll(basePromotion)
@@ -351,7 +343,7 @@ export class Workers {
                         this.bot.logger.info(
                             this.bot.isMobile,
                             'ACTIVITY',
-                            `Found activity type "Quiz" | title="${activity.title}" | offerId=${offerId}`
+                            `发现活动类型"测验" | 标题="${activity.title}" | offerId=${offerId}`
                         )
 
                         await this.bot.activities.doQuiz(basePromotion)
@@ -367,7 +359,7 @@ export class Workers {
                             this.bot.logger.info(
                                 this.bot.isMobile,
                                 'ACTIVITY',
-                                `Found activity type "SearchOnBing" | title="${activity.title}" | offerId=${offerId}`
+                                `发现活动类型"Bing搜索" | 标题="${activity.title}" | offerId=${offerId}`
                             )
 
                             await this.bot.activities.doSearchOnBing(basePromotion, page)
@@ -375,7 +367,7 @@ export class Workers {
                             this.bot.logger.info(
                                 this.bot.isMobile,
                                 'ACTIVITY',
-                                `Found activity type "UrlReward" | title="${activity.title}" | offerId=${offerId}`
+                                `发现活动类型"Url奖励" | 标题="${activity.title}" | offerId=${offerId}`
                             )
 
                             await this.bot.activities.doUrlReward(basePromotion)
@@ -390,7 +382,7 @@ export class Workers {
                         this.bot.logger.info(
                             this.bot.isMobile,
                             'ACTIVITY',
-                            `Found activity type "FindClippy" | title="${activity.title}" | offerId=${offerId}`
+                            `发现活动类型"寻找Clippy" | 标题="${activity.title}" | offerId=${offerId}`
                         )
 
                         await this.bot.activities.doFindClippy(clippyPromotion)
@@ -402,7 +394,7 @@ export class Workers {
                         this.bot.logger.warn(
                             this.bot.isMobile,
                             'ACTIVITY',
-                            `Skipped activity "${activity.title}" | offerId=${offerId} | Reason: Unsupported type "${activity.promotionType}"`
+                            `跳过活动 "${activity.title}" | offerId=${offerId} | 原因: 不支持的类型 "${activity.promotionType}"`
                         )
                         break
                     }
@@ -414,7 +406,7 @@ export class Workers {
                 this.bot.logger.error(
                     this.bot.isMobile,
                     'ACTIVITY',
-                    `Error while solving activity "${activity.title}" | message=${error instanceof Error ? error.message : String(error)}`
+                    `处理活动出错 "${activity.title}" | 消息=${error instanceof Error ? error.message : String(error)}`
                 )
             }
         }

@@ -18,24 +18,24 @@ export class CodeLogin {
 
             if (visibleInput) {
                 await page.keyboard.type(code, { delay: 50 })
-                this.bot.logger.info(this.bot.isMobile, 'LOGIN-CODE', 'Filled code input')
+                this.bot.logger.info(this.bot.isMobile, 'LOGIN-CODE', '已填写代码输入')
                 return true
             }
 
             const secondairyInput = await page.$(this.secondairyInputSelector)
             if (secondairyInput) {
                 await page.keyboard.type(code, { delay: 50 })
-                this.bot.logger.info(this.bot.isMobile, 'LOGIN-CODE', 'Filled code input')
+                this.bot.logger.info(this.bot.isMobile, 'LOGIN-CODE', '已填写代码输入')
                 return true
             }
 
-            this.bot.logger.warn(this.bot.isMobile, 'LOGIN-CODE', 'No code input field found')
+            this.bot.logger.warn(this.bot.isMobile, 'LOGIN-CODE', '未找到代码输入字段')
             return false
         } catch (error) {
             this.bot.logger.warn(
                 this.bot.isMobile,
                 'LOGIN-CODE',
-                `Failed to fill code input: ${error instanceof Error ? error.message : String(error)}`
+                `填写代码输入失败: ${error instanceof Error ? error.message : String(error)}`
             )
             return false
         }

@@ -11,7 +11,7 @@ export class RecoveryLogin {
 
     private async fillEmail(page: Page, email: string): Promise<boolean> {
         try {
-            this.bot.logger.info(this.bot.isMobile, 'LOGIN-RECOVERY', `Attempting to fill email: ${email}`)
+            this.bot.logger.info(this.bot.isMobile, 'LOGIN-RECOVERY', `尝试填写邮箱: ${email}`)
 
             const visibleInput = await page
                 .waitForSelector(this.textInputSelector, { state: 'visible', timeout: 500 })
@@ -20,21 +20,21 @@ export class RecoveryLogin {
             if (visibleInput) {
                 await page.keyboard.type(email, { delay: 50 })
                 await page.keyboard.press('Enter')
-                this.bot.logger.info(this.bot.isMobile, 'LOGIN-RECOVERY', 'Successfully filled email input field')
+                this.bot.logger.info(this.bot.isMobile, 'LOGIN-RECOVERY', '成功填写邮箱输入字段')
                 return true
             }
 
             this.bot.logger.warn(
                 this.bot.isMobile,
                 'LOGIN-RECOVERY',
-                `Email input field not found with selector: ${this.textInputSelector}`
+                `未找到邮箱输入字段，选择器: ${this.textInputSelector}`
             )
             return false
         } catch (error) {
             this.bot.logger.warn(
                 this.bot.isMobile,
                 'LOGIN-RECOVERY',
-                `Failed to fill email input: ${error instanceof Error ? error.message : String(error)}`
+                `填写邮箱输入失败: ${error instanceof Error ? error.message : String(error)}`
             )
             return false
         }
@@ -45,11 +45,7 @@ export class RecoveryLogin {
             this.bot.logger.info(this.bot.isMobile, 'LOGIN-RECOVERY', '邮箱恢复身份验证流程已启动')
 
             if (recoveryEmail) {
-                this.bot.logger.info(
-                    this.bot.isMobile,
-                    'LOGIN-RECOVERY',
-                    `使用提供的恢复邮箱: ${recoveryEmail}`
-                )
+                this.bot.logger.info(this.bot.isMobile, 'LOGIN-RECOVERY', `使用提供的恢复邮箱: ${recoveryEmail}`)
 
                 const filled = await this.fillEmail(page, recoveryEmail)
                 if (!filled) {
@@ -71,11 +67,7 @@ export class RecoveryLogin {
                 return
             }
 
-            this.bot.logger.info(
-                this.bot.isMobile,
-                'LOGIN-RECOVERY',
-                '未提供恢复邮箱，将提示用户输入'
-            )
+            this.bot.logger.info(this.bot.isMobile, 'LOGIN-RECOVERY', '未提供恢复邮箱，将提示用户输入')
 
             for (let attempt = 1; attempt <= this.maxManualAttempts; attempt++) {
                 this.bot.logger.info(

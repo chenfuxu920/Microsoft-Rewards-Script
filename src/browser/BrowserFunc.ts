@@ -298,12 +298,12 @@ export default class BrowserFunc {
 
         try {
             const cookies = await browser.cookies()
-            this.bot.logger.debug(this.bot.isMobile, 'CLOSE-BROWSER', `Saving ${cookies.length} cookies.`)
+            this.bot.logger.debug(this.bot.isMobile, 'CLOSE-BROWSER', `正在保存 ${cookies.length} 个 cookie`)
             await saveSessionData(this.bot.config.sessionPath, cookies, email, this.bot.isMobile)
 
             await this.bot.utils.wait(2000)
         } catch (error) {
-            this.bot.logger.error(this.bot.isMobile, 'CLOSE-BROWSER', `Failed to save session: ${error}`)
+            this.bot.logger.error(this.bot.isMobile, 'CLOSE-BROWSER', `保存会话失败: ${error}`)
         } finally {
             try {
                 unregisterBrowserContext(browser)
@@ -315,11 +315,7 @@ export default class BrowserFunc {
 
                 this.bot.logger.info(this.bot.isMobile, 'CLOSE-BROWSER', '浏览器已干净地关闭！')
             } catch (closeError) {
-                this.bot.logger.warn(
-                    this.bot.isMobile,
-                    'CLOSE-BROWSER',
-                    'Shutdown encountered an error, but process exiting.'
-                )
+                this.bot.logger.warn(this.bot.isMobile, 'CLOSE-BROWSER', '关闭时遇到错误，但进程正在退出')
             }
         }
     }
