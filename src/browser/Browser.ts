@@ -5,6 +5,7 @@ import { BrowserFingerprintWithHeaders, FingerprintGenerator } from 'fingerprint
 import type { MicrosoftRewardsBot } from '../index'
 import { loadSessionData, saveFingerprintData } from '../util/Load'
 import { UserAgentManager } from './UserAgent'
+import { registerBrowserContext, unregisterBrowserContext } from '../index'
 
 import type { Account, AccountProxy } from '../interface/Account'
 
@@ -38,7 +39,6 @@ class Browser {
         '--disable-features=WebAuthentication,PasswordManagerOnboarding,PasswordManager,EnablePasswordsAccountStorage,Passkeys,WebAuthenticationProxy,U2F', // 禁用特定功能
         '--disable-save-password-bubble', // 禁用保存密码提示
         '--lang=zh-CN'
-
     ] as const
 
     constructor(bot: MicrosoftRewardsBot) {
@@ -125,7 +125,10 @@ class Browser {
             )
             this.bot.logger.debug(this.bot.isMobile, 'BROWSER-FINGERPRINT', JSON.stringify(fingerprint))
 
-            return { context: context as unknown as BrowserContext, fingerprint }
+            const browserContext = context as unknown as BrowserContext
+            registerBrowserContext(browserContext)
+
+            return { context: browserContext, fingerprint }
         } catch (error) {
             await browser.close().catch(() => {}) // 出错时关闭浏览器
             throw error

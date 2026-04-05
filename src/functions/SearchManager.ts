@@ -313,36 +313,47 @@ export class SearchManager {
         let mobilePoints = 0
         let desktopPoints = 0
 
-        if (shouldDoMobile) {
-            this.bot.logger.info('main', 'SEARCH-MANAGER', '步骤 1: 移动端')
-            this.bot.logger.debug('main', 'SEARCH-MANAGER', `串行移动端 | 目标=${missingSearchPoints.mobilePoints}`)
-            mobilePoints = await this.doMobileSearch(
-                data,
-                missingSearchPoints,
-                mobileSession,
-                accountEmail,
-                executionContext
-            )
-            this.bot.logger.info('main', 'SEARCH-MANAGER', `步骤 1: 移动端完成 | 获得=${mobilePoints}`)
-        } else {
-            const reason = !this.bot.config.workers.doMobileSearch ? 'disabled' : 'no-points'
-            this.bot.logger.info('main', 'SEARCH-MANAGER', `步骤 1: 跳过移动端 (${reason})；正在关闭移动端会话`)
-            this.bot.logger.debug('main', 'SEARCH-MANAGER', '正在关闭未使用的移动端上下文')
-            try {
-                await executionContext.run({ isMobile: true, accountEmail }, async () => {
-                    await this.bot.browser.func.closeBrowser(mobileSession.context, accountEmail)
-                })
-                this.bot.logger.info('main', 'SEARCH-MANAGER', '未使用的移动端会话已关闭')
-            } catch (error) {
-                this.bot.logger.warn(
-                    'main',
-                    'SEARCH-MANAGER',
-                    `未使用的移动端关闭失败: ${error instanceof Error ? error.message : String(error)}`
+        try {
+            if (shouldDoMobile) {
+                this.bot.logger.info('main', 'SEARCH-MANAGER', '步骤 1: 移动端')
+                this.bot.logger.debug('main', 'SEARCH-MANAGER', `串行移动端 | 目标=${missingSearchPoints.mobilePoints}`)
+                mobilePoints = await this.doMobileSearch(
+                    data,
+                    missingSearchPoints,
+                    mobileSession,
+                    accountEmail,
+                    executionContext
                 )
-                if (error instanceof Error && error.stack) {
-                    this.bot.logger.debug('main', 'SEARCH-MANAGER', `未使用的移动端堆栈: ${error.stack}`)
+                this.bot.logger.info('main', 'SEARCH-MANAGER', `步骤 1: 移动端完成 | 获得=${mobilePoints}`)
+            } else {
+                const reason = !this.bot.config.workers.doMobileSearch ? 'disabled' : 'no-points'
+                this.bot.logger.info('main', 'SEARCH-MANAGER', `步骤 1: 跳过移动端 (${reason})；正在关闭移动端会话`)
+                this.bot.logger.debug('main', 'SEARCH-MANAGER', '正在关闭未使用的移动端上下文')
+                try {
+                    await executionContext.run({ isMobile: true, accountEmail }, async () => {
+                        await this.bot.browser.func.closeBrowser(mobileSession.context, accountEmail)
+                    })
+                    this.bot.logger.info('main', 'SEARCH-MANAGER', '未使用的移动端会话已关闭')
+                } catch (error) {
+                    this.bot.logger.warn(
+                        'main',
+                        'SEARCH-MANAGER',
+                        `未使用的移动端关闭失败: ${error instanceof Error ? error.message : String(error)}`
+                    )
+                    if (error instanceof Error && error.stack) {
+                        this.bot.logger.debug('main', 'SEARCH-MANAGER', `未使用的移动端堆栈: ${error.stack}`)
+                    }
                 }
             }
+        } catch (error) {
+            this.bot.logger.error(
+                'main',
+                'SEARCH-MANAGER',
+                `移动端任务异常: ${error instanceof Error ? error.message : String(error)}`
+            )
+            try {
+                await this.bot.browser.func.closeBrowser(mobileSession.context, accountEmail)
+            } catch {}
         }
 
         if (shouldDoDesktop) {
@@ -693,22 +704,20 @@ export class SearchManager {
                 }
                 return 0
             } finally {
-                if (desktopSession) {
-                    this.bot.logger.info('main', 'SEARCH-DESKTOP-SEQUENTIAL', '正在关闭桌面端会话')
-                    this.bot.logger.debug('main', 'SEARCH-DESKTOP-SEQUENTIAL', `正在关闭上下文 | 账户=${accountEmail}`)
-                    try {
+                this.bot.logger.info('main', 'SEARCH-DESKTOP-SEQUENTIAL', '正在关闭桌面端会话')
+                this.bot.logger.debug('main', 'SEARCH-DESKTOP-SEQUENTIAL', `正在关闭上下文 | 账户=${accountEmail}`)
+                try {
+                    if (desktopSession) {
                         await this.bot.browser.func.closeBrowser(desktopSession.context, accountEmail)
+                        desktopSession = null
                         this.bot.logger.info('main', 'SEARCH-DESKTOP-SEQUENTIAL', '桌面端浏览器已关闭')
-                    } catch (error) {
-                        this.bot.logger.warn(
-                            'main',
-                            'SEARCH-DESKTOP-SEQUENTIAL',
-                            `关闭失败: ${error instanceof Error ? error.message : String(error)}`
-                        )
-                        if (error instanceof Error && error.stack) {
-                            this.bot.logger.debug('main', 'SEARCH-DESKTOP-SEQUENTIAL', `关闭堆栈: ${error.stack}`)
-                        }
                     }
+                } catch (error) {
+                    this.bot.logger.warn(
+                        'main',
+                        'SEARCH-DESKTOP-SEQUENTIAL',
+                        `关闭失败: ${error instanceof Error ? error.message : String(error)}`
+                    )
                 }
             }
         })

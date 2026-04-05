@@ -28,3 +28,4 @@ logs/
 .env
 *.har
 *.html
+memory.text

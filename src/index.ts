@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import cluster, { Worker } from 'cluster'
+import { spawn } from 'child_process'
 import type { BrowserContext, Cookie, Page } from 'patchright'
 import pkg from '../package.json'
 
@@ -60,6 +61,45 @@ export function getCurrentContext(): ExecutionContext {
 
 async function flushAllWebhooks(timeoutMs = 5000): Promise<void> {
     await Promise.allSettled([flushDiscordQueue(timeoutMs), flushNtfyQueue(timeoutMs)])
+}
+
+function forceKillBrowsers(): void {
+    try {
+        spawn('pkill', ['-f', 'chrome-headless-shell'], {
+            stdio: 'ignore',
+            detached: true
+        }).unref()
+    } catch {}
+}
+
+const activeBrowserContexts: Set<BrowserContext> = new Set()
+
+export function registerBrowserContext(context: BrowserContext): void {
+    activeBrowserContexts.add(context)
+}
+
+export function unregisterBrowserContext(context: BrowserContext): void {
+    activeBrowserContexts.delete(context)
+}
+
+async function cleanupAllBrowsers(): Promise<void> {
+    const closePromises: Promise<void>[] = []
+    for (const context of activeBrowserContexts) {
+        closePromises.push(
+            context
+                .close()
+                .catch(() => {})
+                .then(() => {
+                    const browser = (context as any).browser?.()
+                    if (browser) {
+                        return browser.close().catch(() => {})
+                    }
+                })
+        )
+    }
+    await Promise.allSettled(closePromises)
+    activeBrowserContexts.clear()
+    forceKillBrowsers()
 }
 
 interface UserData {
@@ -561,26 +601,31 @@ async function main(): Promise<void> {
     checkNodeVersion()
     const rewardsBot = new MicrosoftRewardsBot()
 
-    process.on('beforeExit', () => {
-        void flushAllWebhooks()
+    process.on('beforeExit', async () => {
+        await cleanupAllBrowsers()
+        await flushAllWebhooks()
     })
     process.on('SIGINT', async () => {
         rewardsBot.logger.warn('main', 'PROCESS', 'SIGINT received, flushing and exiting...')
+        await cleanupAllBrowsers()
         await flushAllWebhooks()
         process.exit(130)
     })
     process.on('SIGTERM', async () => {
         rewardsBot.logger.warn('main', 'PROCESS', 'SIGTERM received, flushing and exiting...')
+        await cleanupAllBrowsers()
         await flushAllWebhooks()
         process.exit(143)
     })
     process.on('uncaughtException', async error => {
         rewardsBot.logger.error('main', 'UNCAUGHT-EXCEPTION', error)
+        await cleanupAllBrowsers()
         await flushAllWebhooks()
         process.exit(1)
     })
     process.on('unhandledRejection', async reason => {
         rewardsBot.logger.error('main', 'UNHANDLED-REJECTION', reason as Error)
+        await cleanupAllBrowsers()
         await flushAllWebhooks()
         process.exit(1)
     })

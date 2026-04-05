@@ -3,6 +3,7 @@ import type { AxiosRequestConfig } from 'axios'
 
 import type { MicrosoftRewardsBot } from '../index'
 import { saveSessionData } from '../util/Load'
+import { unregisterBrowserContext } from '../index'
 
 import type { Counters, DashboardData } from './../interface/DashboardData'
 import type { AppUserData } from '../interface/AppUserData'
@@ -75,7 +76,6 @@ export default class BrowserFunc {
             }
         }
     }
-
 
     /**
      * 获取用户应用仪表板数据
@@ -297,7 +297,6 @@ export default class BrowserFunc {
         const rootBrowser = (browser as any).browser?.() || null
 
         try {
-            // Try to save cookies
             const cookies = await browser.cookies()
             this.bot.logger.debug(this.bot.isMobile, 'CLOSE-BROWSER', `Saving ${cookies.length} cookies.`)
             await saveSessionData(this.bot.config.sessionPath, cookies, email, this.bot.isMobile)
@@ -307,6 +306,7 @@ export default class BrowserFunc {
             this.bot.logger.error(this.bot.isMobile, 'CLOSE-BROWSER', `Failed to save session: ${error}`)
         } finally {
             try {
+                unregisterBrowserContext(browser)
                 await browser.close()
 
                 if (rootBrowser) {
