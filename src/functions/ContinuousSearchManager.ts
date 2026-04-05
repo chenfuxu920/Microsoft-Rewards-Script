@@ -25,6 +25,45 @@ export class ContinuousSearchManager {
         this.bot = bot
     }
 
+    private async closeAllTabsAndRecreate(page: Page, context: BrowserContext): Promise<Page> {
+        try {
+            const pages = context.pages()
+            this.bot.logger.debug(
+                this.bot.isMobile,
+                'CONTINUOUS-SEARCH-CLEANUP',
+                `关闭所有标签页 | 当前标签页数量=${pages.length}`
+            )
+
+            for (const p of pages) {
+                if (!p.isClosed()) {
+                    try {
+                        await p.close()
+                    } catch (error) {
+                        this.bot.logger.debug(
+                            this.bot.isMobile,
+                            'CONTINUOUS-SEARCH-CLEANUP',
+                            `关闭标签页失败: ${error instanceof Error ? error.message : String(error)}`
+                        )
+                    }
+                }
+            }
+
+            await this.bot.utils.wait(1000)
+
+            const newPage = await context.newPage()
+            this.bot.logger.debug(this.bot.isMobile, 'CONTINUOUS-SEARCH-CLEANUP', '已创建新的干净标签页')
+
+            return newPage
+        } catch (error) {
+            this.bot.logger.error(
+                this.bot.isMobile,
+                'CONTINUOUS-SEARCH-CLEANUP',
+                `清理标签页失败: ${error instanceof Error ? error.message : String(error)}`
+            )
+            return page
+        }
+    }
+
     async runContinuousSearch(
         page: Page,
         isMobile: boolean,
@@ -107,6 +146,20 @@ export class ContinuousSearchManager {
                 )
 
                 await this.executeSearchChain(continuousPage, initialQuery, isMobile, 0)
+
+                if (!this.shouldStop() && this.currentSession) {
+                    this.bot.logger.info(
+                        isMobile,
+                        'CONTINUOUS-SEARCH',
+                        '搜索链完成，关闭所有标签页并重新创建新标签页以释放内存'
+                    )
+
+                    continuousPage = await this.closeAllTabsAndRecreate(continuousPage, this.currentSession.context)
+
+                    await continuousPage.goto(this.bingHome, { timeout: 30000 })
+                    await continuousPage.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
+                    await this.bot.browser.utils.tryDismissAllMessages(continuousPage)
+                }
 
                 const intervalMinutes = this.getRandomInt(config.queryIntervalMin, config.queryIntervalMax)
                 this.bot.logger.info(
@@ -449,7 +502,23 @@ export class ContinuousSearchManager {
 
                     await this.bot.utils.wait(this.getRandomInt(2000, 5000))
 
-                    await page.goBack({ waitUntil: 'domcontentloaded' }).catch(() => {})
+                    if (!isMobile) {
+                        const context = page.context()
+                        const pages = context.pages()
+
+                        if (pages.length > 1) {
+                            const newTabs = pages.filter(p => p !== page && !p.isClosed())
+                            for (const tab of newTabs) {
+                                try {
+                                    await tab.close()
+                                    this.bot.logger.debug(isMobile, 'CONTINUOUS-SEARCH-RESULTS', '已关闭新打开的标签页')
+                                } catch {}
+                            }
+                        }
+                    } else {
+                        await page.goBack({ waitUntil: 'domcontentloaded' }).catch(() => {})
+                    }
+
                     await this.bot.utils.wait(this.getRandomInt(1000, 2000))
                 } catch (error) {
                     this.bot.logger.debug(
