@@ -24,8 +24,8 @@ import { ContinuousSearchManager } from './functions/ContinuousSearchManager'
 
 import type { Account } from './interface/Account'
 import AxiosClient from './util/Axios'
-import { sendDiscord, flushDiscordQueue } from './logging/Discord'
-import { sendNtfy, flushNtfyQueue } from './logging/Ntfy'
+import { sendDiscord, flushDiscordQueue, resetDiscordQueue } from './logging/Discord'
+import { sendNtfy, flushNtfyQueue, resetNtfyQueue } from './logging/Ntfy'
 import type { DashboardData } from './interface/DashboardData'
 import type { AppDashboardData } from './interface/AppDashBoardData'
 
@@ -61,6 +61,8 @@ export function getCurrentContext(): ExecutionContext {
 
 async function flushAllWebhooks(timeoutMs = 5000): Promise<void> {
     await Promise.allSettled([flushDiscordQueue(timeoutMs), flushNtfyQueue(timeoutMs)])
+    resetDiscordQueue()
+    resetNtfyQueue()
 }
 
 function forceKillBrowsers(): void {
@@ -88,11 +90,15 @@ async function cleanupAllBrowsers(): Promise<void> {
         closePromises.push(
             context
                 .close()
-                .catch(() => {})
+                .catch((err: any) => {
+                    console.error('Failed to close browser context:', err)
+                })
                 .then(() => {
                     const browser = (context as any).browser?.()
                     if (browser) {
-                        return browser.close().catch(() => {})
+                        return browser.close().catch((err: any) => {
+                            console.error('Failed to close browser:', err)
+                        })
                     }
                 })
         )
@@ -589,7 +595,6 @@ export class MicrosoftRewardsBot {
 export { executionContext }
 
 async function main(): Promise<void> {
-    // Check before doing anything
     checkNodeVersion()
     const rewardsBot = new MicrosoftRewardsBot()
 
@@ -627,6 +632,9 @@ async function main(): Promise<void> {
         await rewardsBot.run()
     } catch (error) {
         rewardsBot.logger.error('main', 'MAIN-ERROR', error as Error)
+        await cleanupAllBrowsers()
+        await flushAllWebhooks()
+        process.exit(1)
     }
 }
 

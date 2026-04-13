@@ -19,10 +19,22 @@ services:
             PLAYWRIGHT_BROWSERS_PATH: '/usr/src/microsoft-rewards-script/pw-browsers'
             PATCHRIGHT_BROWSERS_PATH: '/usr/src/microsoft-rewards-script/pw-browsers'
             SKIP_RANDOM_SLEEP: 'false'
+            # 内存优化配置
+            NODE_OPTIONS: '--max-old-space-size=3072 --expose-gc'
+            # 内存监控（可选，启用后会定期检查内存使用）
+            ENABLE_MEMORY_MONITOR: 'false'
+            MAX_MEMORY_PERCENT: '85'
+            CHECK_INTERVAL: '300'
+            # 超时配置（小时）
+            STUCK_PROCESS_TIMEOUT_HOURS: '8'
 
-        mem_limit: 4g
-        memswap_limit: 4g
-        cpus: 2
+        # 资源限制
+        mem_limit: 3.5g
+        memswap_limit: 3.5g
+        mem_reservation: 512m
+        cpus: 4
+        # 浏览器需要共享内存
+        shm_size: '2gb'
 
         healthcheck:
             test: ['CMD', 'sh', '-c', 'pgrep cron > /dev/null || exit 1']
@@ -39,3 +51,8 @@ services:
             options:
                 max-size: '10m'
                 max-file: '3'
+
+        # 可选：每天凌晨3点自动重启容器（防止长期运行累积问题）
+        labels:
+            - "autoheal=true"
+            - "autoheal.stop.signal=SIGTERM"

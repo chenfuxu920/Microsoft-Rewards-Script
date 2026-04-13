@@ -142,6 +142,11 @@ trap 'release_lock' EXIT INT TERM
 # -------------------------------
 echo "[$(date)] [run_daily.sh] 当前进程PID: $$"
 
+# 清理上次可能残留的进程
+echo "[$(date)] [run_daily.sh] 清理上次残留进程..."
+pkill -9 -f 'chrome-headless-shell' 2>/dev/null || true
+sleep 1
+
 # 在继续之前自愈任何损坏或空锁
 self_heal_lockfile
 
@@ -171,17 +176,37 @@ while true; do
     # 1. 清除诊断信息
     echo "[$(date)] [run_daily.sh] 清除诊断信息..."
     rm -rf ./diagnostics/*
-
-    # 2. 启动实际脚本
+    
+    # 2. 启动实际脚本（添加超时保护）
     echo "[$(date)] [run_daily.sh] 开始脚本..."
-    if npm start; then
+    
+    # 设置脚本超时时间（小时转换为秒）
+    SCRIPT_TIMEOUT_HOURS=${SCRIPT_TIMEOUT_HOURS:-8}
+    SCRIPT_TIMEOUT_SECONDS=$((SCRIPT_TIMEOUT_HOURS * 3600))
+    
+    # 使用timeout命令运行脚本，超时后自动终止
+    if timeout --signal=SIGTERM --kill-after=60 ${SCRIPT_TIMEOUT_SECONDS} npm start; then
         echo "[$(date)] [run_daily.sh] 脚本运行完成。"
     else
-        echo "[$(date)] [run_daily.sh] 警告: 脚本运行过程中出现错误 (npm start 退出码非0)。"
+        EXIT_CODE=$?
+        if [ $EXIT_CODE -eq 124 ]; then
+            echo "[$(date)] [run_daily.sh] 警告: 脚本运行超时 (${SCRIPT_TIMEOUT_HOURS}小时)，已强制终止。"
+        else
+            echo "[$(date)] [run_daily.sh] 警告: 脚本运行过程中出现错误 (退出码: ${EXIT_CODE})。"
+        fi
     fi
+    
+    # 3. 强制清理残留进程
+    echo "[$(date)] [run_daily.sh] 清理残留的浏览器和Node进程..."
+    if [ -f "/usr/src/microsoft-rewards-script/scripts/docker/cleanup-processes.sh" ]; then
+        /usr/src/microsoft-rewards-script/scripts/docker/cleanup-processes.sh
+    else
+        pkill -9 -f 'chrome-headless-shell' 2>/dev/null || true
+        pkill -9 -f 'node.*dist/index.js' 2>/dev/null || true
+    fi
+    sleep 3
 
-    # 3. 检查诊断目录是否存在错误日志
-    # 如果目录不为空，说明触发了错误诊断
+    # 4. 检查诊断目录是否存在错误日志
     if [ "$(ls -A ./diagnostics 2>/dev/null)" ]; then
         echo "[$(date)] [run_daily.sh] 检测到 diagnostics 中存在错误日志，将在 1 小时后重新启动脚本..."
         sleep 3600

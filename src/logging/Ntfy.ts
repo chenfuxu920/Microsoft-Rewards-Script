@@ -3,18 +3,32 @@ import PQueue from 'p-queue'
 import type { WebhookNtfyConfig } from '../interface/Config'
 import type { LogLevel } from './Logger'
 
-const ntfyQueue = new PQueue({
-    interval: 1000,
-    intervalCap: 2,
-    carryoverConcurrencyCount: true
-})
+let ntfyQueue: PQueue | null = null
+
+function getNtfyQueue(): PQueue {
+    if (!ntfyQueue) {
+        ntfyQueue = new PQueue({
+            interval: 1000,
+            intervalCap: 2,
+            carryoverConcurrencyCount: false
+        })
+    }
+    return ntfyQueue
+}
+
+export function resetNtfyQueue(): void {
+    if (ntfyQueue) {
+        ntfyQueue.clear()
+        ntfyQueue = null
+    }
+}
 
 export async function sendNtfy(config: WebhookNtfyConfig, content: string, level: LogLevel): Promise<void> {
     if (!config?.url) return
 
     switch (level) {
         case 'error':
-            config.priority = 5 // Highest
+            config.priority = 5
             break
 
         case 'warn':
@@ -41,7 +55,8 @@ export async function sendNtfy(config: WebhookNtfyConfig, content: string, level
         timeout: 10000
     }
 
-    await ntfyQueue.add(async () => {
+    const queue = getNtfyQueue()
+    await queue.add(async () => {
         try {
             await axios(request)
         } catch (err: any) {
@@ -52,9 +67,10 @@ export async function sendNtfy(config: WebhookNtfyConfig, content: string, level
 }
 
 export async function flushNtfyQueue(timeoutMs = 5000): Promise<void> {
+    const queue = getNtfyQueue()
     await Promise.race([
         (async () => {
-            await ntfyQueue.onIdle()
+            await queue.onIdle()
         })(),
         new Promise<void>((_, reject) => setTimeout(() => reject(new Error('ntfy刷新超时')), timeoutMs))
     ]).catch(() => {})

@@ -49,7 +49,8 @@ ENV NODE_ENV=production \
     TZ=UTC \
     PLAYWRIGHT_BROWSERS_PATH=/usr/src/microsoft-rewards-script/pw-browsers \
     PATCHRIGHT_BROWSERS_PATH=/usr/src/microsoft-rewards-script/pw-browsers \
-    FORCE_HEADLESS=1
+    FORCE_HEADLESS=1 \
+    NODE_OPTIONS="--max-old-space-size=3072 --expose-gc"
 
 # Install minimal system libraries required for Chromium headless to run
 RUN sed -i 's/deb.debian.org/mirrors.ustc.edu.cn/g' /etc/apt/sources.list \
@@ -99,6 +100,8 @@ COPY --from=builder /usr/src/microsoft-rewards-script/pw-browsers ./pw-browsers
 COPY --chmod=755 scripts/docker/run_daily.sh ./scripts/docker/run_daily.sh
 COPY --chmod=755 scripts/docker/run_daily_cron.sh ./scripts/docker/run_daily_cron.sh
 COPY --chmod=755 scripts/docker/log-forwarder.sh ./scripts/docker/log-forwarder.sh
+COPY --chmod=755 scripts/docker/memory_monitor.sh ./scripts/docker/memory_monitor.sh
+COPY --chmod=755 scripts/docker/cleanup-processes.sh ./scripts/docker/cleanup-processes.sh
 COPY --chmod=644 src/crontab.template /etc/cron.d/microsoft-rewards-cron.template
 COPY --chmod=755 entrypoint.sh /usr/local/bin/entrypoint.sh
 
