@@ -1,5 +1,6 @@
 import type { AxiosRequestConfig } from 'axios'
 import { randomUUID } from 'crypto'
+import type { Page } from 'patchright'
 import type { BasePromotion } from '../../../interface/DashboardData'
 import { Workers } from '../../Workers'
 
@@ -11,35 +12,33 @@ export class UrlReward extends Workers {
     public async doUrlReward(promotion: BasePromotion) {
         const offerId = promotion.offerId
 
-        // 优先级: dapi > legacy > modern
-        // dapi需要accessToken，legacy需要requestToken，modern需要浏览器
-        let flowType = 'modern'
-        if (this.bot.accessToken) {
-            flowType = 'dapi'
-        } else if (this.bot.requestToken) {
-            flowType = 'legacy'
-        }
+        // 优先级: modern > dapi > legacy
+        // modern通过浏览器点击触发RSC Server Action，是最可靠的方式
+        // dapi/legacy缺少RSC激活步骤，可能无法完成部分任务
+        const hasPage = !!(this.bot.isMobile ? this.bot.mainMobilePage : this.bot.mainDesktopPage)
 
         this.bot.logger.info(
             this.bot.isMobile,
             'URL-REWARD',
-            `开始UrlReward | offerId=${offerId} | 模式=${flowType} | 地区=${this.bot.userData.geoLocale} | 旧余额=${this.oldBalance}`
+            `开始UrlReward | offerId=${offerId} | 有浏览器=${hasPage} | 地区=${this.bot.userData.geoLocale} | 旧余额=${this.oldBalance}`
         )
 
         try {
             let success = false
 
-            if (flowType === 'dapi') {
-                success = await this.doDapiFlow(promotion)
-                // 如果dapi失败，尝试回退到其他方式
-                if (!success && this.bot.requestToken) {
-                    this.bot.logger.info(this.bot.isMobile, 'URL-REWARD', 'Dapi流程失败，尝试legacy流程')
-                    success = await this.doLegacyFlow(promotion)
-                }
-            } else if (flowType === 'legacy') {
-                success = await this.doLegacyFlow(promotion)
-            } else {
+            // 始终优先尝试modern流程（浏览器点击触发RSC Server Action）
+            if (hasPage) {
                 success = await this.doModernFlow(promotion)
+            }
+
+            // modern失败时回退到API方式
+            if (!success && this.bot.accessToken) {
+                this.bot.logger.info(this.bot.isMobile, 'URL-REWARD', 'Modern流程失败，尝试dapi流程')
+                success = await this.doDapiFlow(promotion)
+            }
+            if (!success && this.bot.requestToken) {
+                this.bot.logger.info(this.bot.isMobile, 'URL-REWARD', '尝试legacy流程')
+                success = await this.doLegacyFlow(promotion)
             }
 
             if (success) {
@@ -255,33 +254,110 @@ export class UrlReward extends Workers {
         const offerId = promotion.offerId
         const page = this.bot.isMobile ? this.bot.mainMobilePage : this.bot.mainDesktopPage
 
+        if (!page) {
+            this.bot.logger.warn(this.bot.isMobile, 'URL-REWARD-MODERN', '没有可用的浏览器页面')
+            return false
+        }
+
         // 1. 导航到earn页面
         this.bot.logger.info(this.bot.isMobile, 'URL-REWARD-MODERN', `导航到earn页面 | offerId=${offerId}`)
-
         await page.goto('https://rewards.bing.com/earn', { waitUntil: 'networkidle', timeout: 30000 }).catch(() => {})
 
         // 2. 等待offer链接渲染（RSC流式加载，需要等DOM元素出现）
-        await page.waitForSelector('a[href]', { state: 'attached', timeout: 15000 })
+        await page.waitForSelector('a[href]', { state: 'attached', timeout: 15000 }).catch(() => {})
 
-        // 3. 通过标题定位offer卡片并点击（触发RSC POST /earn + 跳转目标URL）
+        // 3. 多策略定位offer卡片并点击
+        let clicked = false
+        let rscTriggered = false
+
+        // 策略1: 通过标题文本定位
         this.bot.logger.info(
             this.bot.isMobile,
             'URL-REWARD-MODERN',
-            `点击offer卡片 | offerId=${offerId} | 标题="${promotion.title}"`
+            `策略1: 通过标题定位 | offerId=${offerId} | 标题="${promotion.title}"`
         )
-
         try {
             const link = page.locator('a').filter({ hasText: promotion.title }).first()
-            await link.waitFor({ state: 'visible', timeout: 10000 })
-            await link.click()
-            this.bot.logger.info(this.bot.isMobile, 'URL-REWARD-MODERN', `已点击offer卡片 | offerId=${offerId}`)
+            await link.waitFor({ state: 'visible', timeout: 8000 })
+            rscTriggered = await this.clickAndWaitRscAction(page, link, offerId)
+            clicked = true
         } catch {
+            this.bot.logger.debug(this.bot.isMobile, 'URL-REWARD-MODERN', `策略1失败: 标题未找到 | offerId=${offerId}`)
+        }
+
+        // 策略2: 滚动页面后再次通过标题定位（处理首屏下方的offer）
+        if (!clicked) {
+            this.bot.logger.info(this.bot.isMobile, 'URL-REWARD-MODERN', `策略2: 滚动后通过标题定位 | offerId=${offerId}`)
+            try {
+                await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
+                await this.bot.utils.wait(2000)
+
+                const link = page.locator('a').filter({ hasText: promotion.title }).first()
+                await link.waitFor({ state: 'visible', timeout: 5000 })
+                rscTriggered = await this.clickAndWaitRscAction(page, link, offerId)
+                clicked = true
+            } catch {
+                this.bot.logger.debug(this.bot.isMobile, 'URL-REWARD-MODERN', `策略2失败 | offerId=${offerId}`)
+            }
+        }
+
+        // 策略3: 通过destinationUrl中的搜索关键词定位
+        if (!clicked && promotion.destinationUrl) {
+            this.bot.logger.info(this.bot.isMobile, 'URL-REWARD-MODERN', `策略3: 通过destinationUrl定位 | offerId=${offerId}`)
+            try {
+                const destUrl = new URL(promotion.destinationUrl)
+                const searchQuery = destUrl.searchParams.get('q')
+                if (searchQuery) {
+                    const encodedQuery = encodeURIComponent(searchQuery)
+                    const link = page.locator(`a[href*="${encodedQuery}"]`).first()
+                    await link.waitFor({ state: 'visible', timeout: 5000 })
+                    this.bot.logger.info(
+                        this.bot.isMobile,
+                        'URL-REWARD-MODERN',
+                        `通过destinationUrl找到offer卡片 | offerId=${offerId} | 关键词="${searchQuery}"`
+                    )
+                    rscTriggered = await this.clickAndWaitRscAction(page, link, offerId)
+                    clicked = true
+                }
+            } catch {
+                this.bot.logger.debug(this.bot.isMobile, 'URL-REWARD-MODERN', `策略3失败 | offerId=${offerId}`)
+            }
+        }
+
+        // 策略4: 滚动 + destinationUrl定位
+        if (!clicked && promotion.destinationUrl) {
+            this.bot.logger.info(this.bot.isMobile, 'URL-REWARD-MODERN', `策略4: 滚动后通过destinationUrl定位 | offerId=${offerId}`)
+            try {
+                await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
+                await this.bot.utils.wait(2000)
+
+                const destUrl = new URL(promotion.destinationUrl)
+                const searchQuery = destUrl.searchParams.get('q')
+                if (searchQuery) {
+                    const encodedQuery = encodeURIComponent(searchQuery)
+                    const link = page.locator(`a[href*="${encodedQuery}"]`).first()
+                    await link.waitFor({ state: 'visible', timeout: 5000 })
+                    rscTriggered = await this.clickAndWaitRscAction(page, link, offerId)
+                    clicked = true
+                }
+            } catch {
+                this.bot.logger.debug(this.bot.isMobile, 'URL-REWARD-MODERN', `策略4失败 | offerId=${offerId}`)
+            }
+        }
+
+        if (!clicked) {
             this.bot.logger.warn(
                 this.bot.isMobile,
                 'URL-REWARD-MODERN',
-                `未找到offer卡片 | offerId=${offerId} | 标题="${promotion.title}"`
+                `所有策略均未找到offer卡片 | offerId=${offerId} | 标题="${promotion.title}"`
             )
             return false
+        }
+
+        if (rscTriggered) {
+            this.bot.logger.info(this.bot.isMobile, 'URL-REWARD-MODERN', `RSC Server Action已触发 | offerId=${offerId}`)
+        } else {
+            this.bot.logger.warn(this.bot.isMobile, 'URL-REWARD-MODERN', `RSC Server Action未检测到，积分可能不会增加 | offerId=${offerId}`)
         }
 
         // 4. 等待目标页面加载完成
@@ -307,8 +383,53 @@ export class UrlReward extends Workers {
         this.bot.logger.warn(
             this.bot.isMobile,
             'URL-REWARD-MODERN',
-            `Modern流程未获得积分 | offerId=${offerId} | 旧余额=${this.oldBalance} | 新余额=${newBalance}`
+            `Modern流程未获得积分 | offerId=${offerId} | 旧余额=${this.oldBalance} | 新余额=${newBalance} | RSC触发=${rscTriggered}`
         )
+        return false
+    }
+
+    /**
+     * 点击offer卡片并等待RSC Server Action完成
+     * 点击earn页面上的offer卡片会触发Next.js RSC Server Action（POST /earn），
+     * 这是激活offer并获取积分的必要步骤
+     */
+    private async clickAndWaitRscAction(page: Page, link: import('patchright').Locator, offerId: string): Promise<boolean> {
+        // 监听RSC Server Action请求（POST /earn 且带有next-action头）
+        const rscResponsePromise = page.waitForResponse(
+            resp => {
+                try {
+                    const url = new URL(resp.url())
+                    if (url.pathname === '/earn' && resp.request().method() === 'POST') {
+                        const headers = resp.request().headers()
+                        return !!headers['next-action']
+                    }
+                } catch { /* ignore */ }
+                return false
+            },
+            { timeout: 10000 }
+        ).catch(() => null)
+
+        await link.click()
+        this.bot.logger.info(this.bot.isMobile, 'URL-REWARD-MODERN', `已点击offer卡片 | offerId=${offerId}`)
+
+        const rscResp = await rscResponsePromise
+        if (rscResp) {
+            try {
+                const body = await rscResp.text()
+                // RSC action成功时返回 "1:true"
+                const success = body.includes('true')
+                this.bot.logger.info(
+                    this.bot.isMobile,
+                    'URL-REWARD-MODERN',
+                    `RSC响应 | offerId=${offerId} | 状态=${rscResp.status()} | 成功=${success}`
+                )
+                return success
+            } catch {
+                this.bot.logger.debug(this.bot.isMobile, 'URL-REWARD-MODERN', `RSC响应读取失败 | offerId=${offerId}`)
+                return true // 请求已发送，可能是成功的
+            }
+        }
+
         return false
     }
 
