@@ -2,7 +2,7 @@ import type { Page } from 'patchright'
 import type { MicrosoftRewardsBot } from '../../../index'
 
 export class PasswordlessLogin {
-    private readonly maxAttempts = 60
+    private readonly maxAttempts = 120
     private readonly numberDisplaySelector = 'div[data-testid="displaySign"]'
     private readonly approvalPath = '/ppsecure/post.srf'
 
