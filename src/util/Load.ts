@@ -6,6 +6,7 @@ import path from 'path'
 import type { Account, ConfigSaveFingerprint } from '../interface/Account'
 import type { Config } from '../interface/Config'
 import { validateAccounts, validateConfig } from './Validator'
+import { safeJsonParse } from './Utils'
 
 let configCache: Config
 
@@ -62,7 +63,7 @@ export async function loadSessionData(
         let cookies: Cookie[] = []
         if (fs.existsSync(cookieFile)) {
             const cookiesData = await fs.promises.readFile(cookieFile, 'utf-8')
-            cookies = JSON.parse(cookiesData)
+            cookies = safeJsonParse(cookiesData) as Cookie[]
         }
 
         const fingerprintFileName = isMobile ? 'session_fingerprint_mobile.json' : 'session_fingerprint_desktop.json'
@@ -72,7 +73,7 @@ export async function loadSessionData(
         const shouldLoadFingerprint = isMobile ? saveFingerprint.mobile : saveFingerprint.desktop
         if (shouldLoadFingerprint && fs.existsSync(fingerprintFile)) {
             const fingerprintData = await fs.promises.readFile(fingerprintFile, 'utf-8')
-            fingerprint = JSON.parse(fingerprintData)
+            fingerprint = safeJsonParse(fingerprintData) as BrowserFingerprintWithHeaders
         }
 
         return {
@@ -80,7 +81,7 @@ export async function loadSessionData(
             fingerprint: fingerprint
         }
     } catch (error) {
-        throw new Error(error as string)
+        throw new Error(`加载会话数据失败 (${email}): ${error instanceof Error ? error.message : String(error)}`)
     }
 }
 

@@ -28,6 +28,7 @@ type LoginState =
     | 'GET_A_CODE'
     | 'GET_A_CODE_2'
     | 'OTP_CODE_ENTRY'
+    | 'POST_SECURE_REDIRECT'
     | 'UNKNOWN'
     | 'CHROMEWEBDATA_ERROR'
 
@@ -105,18 +106,20 @@ export class Login {
                     this.bot.logger.info(this.bot.isMobile, 'LOGIN', `状态转换: ${previousState} → ${state}`)
                 }
 
-                if (state === previousState && state !== 'LOGGED_IN' && state !== 'UNKNOWN') {
+                if (state === previousState && state !== 'LOGGED_IN') {
                     sameStateCount++
+                    // UNKNOWN 状态使用更高的阈值（6次），其他状态保持4次
+                    const staleThreshold = state === 'UNKNOWN' ? 6 : 4
                     this.bot.logger.debug(
                         this.bot.isMobile,
                         'LOGIN',
-                        `相同状态计数: ${sameStateCount}/4 状态为 "${state}"`
+                        `相同状态计数: ${sameStateCount}/${staleThreshold} 状态为 "${state}"`
                     )
-                    if (sameStateCount >= 4) {
+                    if (sameStateCount >= staleThreshold) {
                         this.bot.logger.warn(
                             this.bot.isMobile,
                             'LOGIN',
-                            `在状态 "${state}" 停滞4次循环，刷新页面`
+                            `在状态 "${state}" 停滞${staleThreshold}次循环，刷新页面`
                         )
                         await page.reload({ waitUntil: 'domcontentloaded' })
                         await this.bot.utils.wait(3000)
@@ -228,6 +231,11 @@ export class Login {
         let foundStates = results.filter((s): s is LoginState => s !== null)
 
         if (foundStates.length === 0) {
+            // 识别 ppsecure/post.srf 页面 — 微软登录流程中的表单自动提交/重定向页面
+            if (url.hostname === 'login.live.com' && url.pathname.includes('/ppsecure/post')) {
+                this.bot.logger.debug(this.bot.isMobile, 'DETECT-STATE', '检测到 ppsecure/post.srf 重定向页面')
+                return 'POST_SECURE_REDIRECT'
+            }
             this.bot.logger.debug(this.bot.isMobile, 'DETECT-STATE', '未找到匹配的状态')
             return 'UNKNOWN'
         }
@@ -333,11 +341,7 @@ export class Login {
                     this.bot.logger.info(this.bot.isMobile, 'LOGIN', '找到"其他登录方式"链接')
                     await this.bot.browser.utils.ghostClick(page, this.selectors.otherWaysToSignIn)
                     await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {
-                        this.bot.logger.debug(
-                            this.bot.isMobile,
-                            'LOGIN',
-                            '点击其他方式后网络空闲超时'
-                        )
+                        this.bot.logger.debug(this.bot.isMobile, 'LOGIN', '点击其他方式后网络空闲超时')
                     })
                     this.bot.logger.info(this.bot.isMobile, 'LOGIN', '"其他登录方式"已点击')
                     return true
@@ -506,11 +510,7 @@ export class Login {
             }
 
             case 'OTP_CODE_ENTRY': {
-                this.bot.logger.info(
-                    this.bot.isMobile,
-                    'LOGIN',
-                    '检测到OTP代码输入页面，尝试查找密码选项'
-                )
+                this.bot.logger.info(this.bot.isMobile, 'LOGIN', '检测到OTP代码输入页面，尝试查找密码选项')
 
                 // 我的修复: 点击"使用您的密码"页脚
                 const footerLink = await page
@@ -541,13 +541,62 @@ export class Login {
                 return true
             }
 
-            case 'UNKNOWN': {
-                const url = new URL(page.url())
-                this.bot.logger.warn(
+            case 'POST_SECURE_REDIRECT': {
+                const postUrl = new URL(page.url())
+                this.bot.logger.info(
                     this.bot.isMobile,
                     'LOGIN',
-                    `在 ${url.hostname}${url.pathname} 的未知状态，等待中`
+                    `处理 ppsecure/post.srf 重定向 | 路径=${postUrl.pathname}`
                 )
+
+                // 阶段1: 等待页面自动重定向（最多8秒）
+                await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {})
+
+                const urlAfterWait = new URL(page.url())
+                if (urlAfterWait.hostname !== 'login.live.com' || !urlAfterWait.pathname.includes('/ppsecure/post')) {
+                    this.bot.logger.info(this.bot.isMobile, 'LOGIN', 'ppsecure/post.srf 重定向完成')
+                    return true
+                }
+
+                // 阶段2: 尝试提交页面上的表单（微软登录流程中此页面通常有自动提交的表单）
+                this.bot.logger.info(this.bot.isMobile, 'LOGIN', '页面未自动重定向，尝试手动提交表单')
+                const formSubmitted = await page
+                    .evaluate(() => {
+                        const form = document.querySelector('form')
+                        if (form) {
+                            form.submit()
+                            return true
+                        }
+                        return false
+                    })
+                    .catch(() => false)
+
+                if (formSubmitted) {
+                    this.bot.logger.info(this.bot.isMobile, 'LOGIN', '表单已提交，等待导航')
+                    await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {})
+
+                    const urlAfterForm = new URL(page.url())
+                    if (
+                        urlAfterForm.hostname !== 'login.live.com' ||
+                        !urlAfterForm.pathname.includes('/ppsecure/post')
+                    ) {
+                        this.bot.logger.info(this.bot.isMobile, 'LOGIN', '表单提交后重定向成功')
+                        return true
+                    }
+                }
+
+                // 阶段3: 直接导航到奖励页面
+                this.bot.logger.warn(this.bot.isMobile, 'LOGIN', 'ppsecure/post.srf 重定向失败，导航到奖励页面')
+                await page
+                    .goto(this.bot.config.baseURL, { waitUntil: 'domcontentloaded', timeout: 10000 })
+                    .catch(() => {})
+                await this.bot.utils.wait(2000)
+                return true
+            }
+
+            case 'UNKNOWN': {
+                const url = new URL(page.url())
+                this.bot.logger.warn(this.bot.isMobile, 'LOGIN', `在 ${url.hostname}${url.pathname} 的未知状态，等待中`)
                 return true
             }
 

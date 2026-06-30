@@ -5,6 +5,7 @@ import { HttpsProxyAgent } from 'https-proxy-agent'
 import { SocksProxyAgent } from 'socks-proxy-agent'
 import { URL } from 'url'
 import type { AccountProxy } from '../interface/Account'
+import { safeJsonParse } from './Utils'
 
 class AxiosClient {
     private instance: AxiosInstance
@@ -14,7 +15,19 @@ class AxiosClient {
         this.account = account
 
         this.instance = axios.create({
-            timeout: 20000
+            timeout: 20000,
+            transformResponse: [
+                (data: any) => {
+                    if (typeof data === 'string' && data.length > 0) {
+                        try {
+                            return safeJsonParse(data)
+                        } catch {
+                            return data
+                        }
+                    }
+                    return data
+                }
+            ]
         })
 
         if (this.account.url && this.account.proxyAxios) {

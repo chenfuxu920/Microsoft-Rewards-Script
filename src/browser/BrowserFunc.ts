@@ -4,6 +4,7 @@ import type { AxiosRequestConfig } from 'axios'
 import type { MicrosoftRewardsBot } from '../index'
 import { saveSessionData } from '../util/Load'
 import { unregisterBrowserContext } from '../index'
+import { safeJsonParse } from '../util/Utils'
 
 import type { Counters, DashboardData } from './../interface/DashboardData'
 import type { AppUserData } from '../interface/AppUserData'
@@ -36,13 +37,15 @@ export default class BrowserFunc {
                     ]),
                     Referer: 'https://rewards.bing.com/',
                     Origin: 'https://rewards.bing.com'
-                }
+                },
+                responseType: 'text'
             }
 
             const response = await this.bot.axios.request(request)
 
-            if (response.data?.dashboard) {
-                return response.data.dashboard as DashboardData
+            const parsed = typeof response.data === 'string' ? safeJsonParse(response.data) : response.data
+            if (parsed?.dashboard) {
+                return parsed.dashboard as DashboardData
             }
             throw new Error('Dashboard data missing from API response')
         } catch (error) {
@@ -58,17 +61,33 @@ export default class BrowserFunc {
                         Cookie: this.buildCookieHeader(this.bot.cookies.mobile),
                         Referer: 'https://rewards.bing.com/',
                         Origin: 'https://rewards.bing.com'
-                    }
+                    },
+                    responseType: 'text'
                 }
 
                 const response = await this.bot.axios.request(request)
-                const match = response.data.match(/var\s+dashboard\s*=\s*({.*?});/s)
+                const html = typeof response.data === 'string' ? response.data : String(response.data ?? '')
 
-                if (!match?.[1]) {
-                    throw new Error('在HTML中未找到仪表板脚本')
+                // 旧版页面: var dashboard = {...};
+                let match = html.match(/var\s+dashboard\s*=\s*({.*?});/s)
+                if (match?.[1]) {
+                    return safeJsonParse(match[1]) as DashboardData
                 }
 
-                return JSON.parse(match[1]) as DashboardData
+                // Next.js RSC 页面: 在 __next_f.push 中查找仪表板数据
+                const nextDataMatch = html.match(/"dashboard"\s*:\s*({)/)
+                if (nextDataMatch) {
+                    const idx = nextDataMatch.index! + nextDataMatch[0].length - 1
+                    const jsonStr = this.extractBalancedJson(html, idx)
+                    if (jsonStr) {
+                        const dashboard = safeJsonParse(jsonStr) as DashboardData
+                        if (dashboard?.userStatus) {
+                            return dashboard
+                        }
+                    }
+                }
+
+                throw new Error('在HTML中未找到仪表板脚本')
             } catch (fallbackError) {
                 // 如果两者都失败
                 this.bot.logger.error(this.bot.isMobile, 'GET-DASHBOARD-DATA', '获取仪表板数据失败')
@@ -90,11 +109,13 @@ export default class BrowserFunc {
                     Authorization: `Bearer ${this.bot.accessToken}`,
                     'User-Agent':
                         'Bing/32.5.431027001 (com.microsoft.bing; build:431027001; iOS 17.6.1) Alamofire/5.10.2'
-                }
+                },
+                responseType: 'text'
             }
 
             const response = await this.bot.axios.request(request)
-            return response.data as AppDashboardData
+            const parsed = typeof response.data === 'string' ? safeJsonParse(response.data) : response.data
+            return parsed as AppDashboardData
         } catch (error) {
             this.bot.logger.error(
                 this.bot.isMobile,
@@ -118,11 +139,13 @@ export default class BrowserFunc {
                     Authorization: `Bearer ${this.bot.accessToken}`,
                     'User-Agent':
                         'Mozilla/5.0 (Windows NT 10.0; Win64; x64; Xbox; Xbox One X) AppleWebKit/537.36 (KHTML, like Gecko) Edge/18.19041'
-                }
+                },
+                responseType: 'text'
             }
 
             const response = await this.bot.axios.request(request)
-            return response.data as XboxDashboardData
+            const parsed = typeof response.data === 'string' ? safeJsonParse(response.data) : response.data
+            return parsed as XboxDashboardData
         } catch (error) {
             this.bot.logger.error(
                 this.bot.isMobile,
@@ -227,11 +250,13 @@ export default class BrowserFunc {
                     'X-Rewards-Country': this.bot.userData.geoLocale,
                     'X-Rewards-Language': 'zh-CN',
                     'X-Rewards-ismobile': 'true'
-                }
+                },
+                responseType: 'text'
             }
 
             const response = await this.bot.axios.request(request)
-            const userData: AppUserData = response.data
+            const parsed = typeof response.data === 'string' ? safeJsonParse(response.data) : response.data
+            const userData: AppUserData = parsed
             const eligibleActivities = userData.response.promotions.filter(x =>
                 eligibleOffers.includes(x.attributes.offerid ?? '')
             )
@@ -336,5 +361,48 @@ export default class BrowserFunc {
         ]
             .map(c => `${c.name}=${c.value}`)
             .join('; ')
+    }
+
+    /**
+     * 从 HTML 字符串中指定位置开始提取一个平衡的 JSON 对象字符串。
+     * 用于从 Next.js RSC 数据中提取 dashboard 对象。
+     */
+    private extractBalancedJson(html: string, startIdx: number): string | null {
+        if (html[startIdx] !== '{') return null
+
+        let depth = 0
+        let inString = false
+        let escape = false
+
+        for (let i = startIdx; i < html.length; i++) {
+            const c = html[i]
+            if (c === undefined) break
+
+            if (inString) {
+                if (escape) {
+                    escape = false
+                } else if (c === '\\') {
+                    escape = true
+                } else if (c === '"') {
+                    inString = false
+                }
+                continue
+            }
+
+            if (c === '"') {
+                inString = true
+                continue
+            }
+
+            if (c === '{') depth++
+            else if (c === '}') {
+                depth--
+                if (depth === 0) {
+                    return html.slice(startIdx, i + 1)
+                }
+            }
+        }
+
+        return null
     }
 }
