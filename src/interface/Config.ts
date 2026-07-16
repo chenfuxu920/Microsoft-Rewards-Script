@@ -5,6 +5,7 @@ export interface Config {
     clusters: number
     errorDiagnostics: boolean
     workers: ConfigWorkers
+    claimPoints: ConfigClaimPoints
     searchOnBingLocalQueries: boolean
     globalTimeout: number | string
     searchSettings: ConfigSearchSettings
@@ -15,11 +16,11 @@ export interface Config {
     webhook: ConfigWebhook
 }
 
-export type QueryEngine = 
-    | 'china' 
-    | 'google' 
-    | 'wikipedia' 
-    | 'reddit' 
+export type QueryEngine =
+    | 'china'
+    | 'google'
+    | 'wikipedia'
+    | 'reddit'
     | 'local'
     | 'hackernews'
     | 'github'
@@ -63,6 +64,14 @@ export interface ConfigWorkers {
     doDailyCheckIn: boolean
     doReadToEarn: boolean
     doContinuousSearch: boolean
+    doClaimDashboardPoints: boolean
+}
+
+export interface ConfigClaimPoints {
+    /** Next.js Server Action hash —— 从 HAR 抓包中提取，随网页部署版本变化 */
+    nextActionHash: string
+    /** 部署版本 ID —— 从页面 response header 或 script 标签的 dpl 参数提取，留空则自动检测 */
+    deploymentId: string
 }
 
 export interface ConfigContinuousSearch {

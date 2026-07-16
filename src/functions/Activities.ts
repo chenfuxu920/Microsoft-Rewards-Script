@@ -16,6 +16,7 @@ import { DoubleSearchPoints } from './activities/api/DoubleSearchPoints'
 import { SearchOnBing } from './activities/browser/SearchOnBing'
 import { Search } from './activities/browser/Search'
 import { PunchCardExecutor } from './activities/browser/PunchCardExecutor'
+import { ClaimDashboardPoints } from './activities/browser/ClaimDashboardPoints'
 
 import type {
     BasePromotion,
@@ -107,5 +108,11 @@ export default class Activities {
     doPunchCard = async (punchCard: PunchCard, page: Page): Promise<void> => {
         const executor = new PunchCardExecutor(this.bot, page)
         await executor.execute(punchCard)
+    }
+
+    // Dashboard Points Claim
+    doClaimDashboardPoints = async (page: Page): Promise<void> => {
+        const claimer = new ClaimDashboardPoints(this.bot, page)
+        await claimer.execute()
     }
 }

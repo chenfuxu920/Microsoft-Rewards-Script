@@ -90,7 +90,12 @@ export const ConfigSchema = z.object({
         doMobileSearch: z.boolean(),
         doDailyCheckIn: z.boolean(),
         doReadToEarn: z.boolean(),
-        doContinuousSearch: z.boolean()
+        doContinuousSearch: z.boolean(),
+        doClaimDashboardPoints: z.boolean()
+    }),
+    claimPoints: z.object({
+        nextActionHash: z.string(),
+        deploymentId: z.string()
     }),
     searchOnBingLocalQueries: z.boolean(),
     globalTimeout: NumberOrString,

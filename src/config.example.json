@@ -14,7 +14,12 @@
         "doMobileSearch": true,
         "doDailyCheckIn": true,
         "doReadToEarn": true,
-        "doContinuousSearch": false
+        "doContinuousSearch": false,
+        "doClaimDashboardPoints": false
+    },
+    "claimPoints": {
+        "nextActionHash": "00cf5ba7699f0e920ffcff223f9e48fea78fd49784",
+        "deploymentId": ""
     },
     "searchOnBingLocalQueries": false,
     "globalTimeout": "50sec",

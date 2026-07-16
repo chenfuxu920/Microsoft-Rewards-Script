@@ -490,6 +490,8 @@ export class MicrosoftRewardsBot {
                 if (this.config.workers.doDailyCheckIn) await this.activities.doDailyCheckIn()
                 if (this.config.workers.doReadToEarn) await this.activities.doReadToEarn()
                 if (this.config.workers.doPunchCards) await this.workers.doPunchCards(data, this.mainMobilePage)
+                if (this.config.workers.doClaimDashboardPoints)
+                    await this.activities.doClaimDashboardPoints(this.mainMobilePage)
 
                 const searchPoints = await this.browser.func.getSearchPoints()
                 const missingSearchPoints = this.browser.func.missingSearchPoints(searchPoints, true)
