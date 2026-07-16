@@ -17,6 +17,10 @@
 - `loadConfig()` 有模块级 `configCache`，进程内不会重读。
 - `.gitignore` 忽略 `src/accounts.json` 与 `src/config.json`（含密钥），仅 `*.example.json` 入库；`dist/` 整体被忽略。
 
+## 重要：accounts.json 是扁平数组
+
+`src/accounts.example.json` 格式是 `[{...}, {...}]`，**不是** `{"accounts": [...]}`。Docker compose.yaml 用户通过 `ACCOUNT_1_EMAIL` / `ACCOUNT_1_PASSWORD` 等环境变量注入，脚本按序号递增直到遇不到 `ACCOUNT_N_EMAIL` 为止。
+
 ## 浏览器引擎：patchright（不是 playwright）
 
 依赖是 `patchright`（反检测分支），**不是** playwright。安装命令：
@@ -30,6 +34,8 @@ npm start           # = node ./dist/index.js
 `pre-build` 必须在首次或清空后跑一次以安装 chromium。`PLAYWRIGHT_BROWSERS_PATH` / `PATCHRIGHT_BROWSERS_PATH` 同时需要设置（Dockerfile 与 compose 均已配置）。
 
 Node >= 24 强制要求，`src/util/Validator.ts` 的 `checkNodeVersion()` 在启动时校验，不满足直接 `exit(1)`。
+
+Docker 镜像内 `FORCE_HEADLESS=1`，强制无头模式（无论 config 里 `headless` 设什么）。
 
 ## 两个 docker compose 文件（别混用）
 
@@ -64,7 +70,7 @@ npm run open-session -- -email you@example.com   # 打开真实浏览器调试�
 ## 代码风格与校验（重要坑）
 
 - **没有 `lint` / `typecheck` npm 脚本**，CI 也不跑 lint。改代码后请手动 `npm run build` 验证编译，`npm run format:check` 验证格式。
-- **存在两个冲突的 ESLint 配置**：`.eslintrc.js`（单引号、无分号）与 `.eslintrc.json`（双引号、`@typescript-eslint/no-explicit-any: off`）。若手动 `npx eslint`，`.eslintrc.js` 优先；但实际项目以 **prettier 为准**：`.prettierrc` = 无分号、单引号、无尾逗号、4 空格、`printWidth: 120`、`endOfLine: lf`。
+- **存在两个冲突的 ESLint 配置**：`.eslintrc.js`（单引号、无分号、`no-explicit-any: warn`）与 `.eslintrc.json`（双引号、`@typescript-eslint/no-explicit-any: off`、`modules-newline` 插件）。若手动 `npx eslint`，`.eslintrc.js` 优先；但实际项目以 **prettier 为准**：`.prettierrc` = 无分号、单引号、无尾逗号、4 空格、`printWidth: 120`、`endOfLine: lf`。
 - `tsconfig.json` 严格模式全开（`strict`、`noUncheckedIndexedAccess`、`noImplicitOverride` 等），索引访问结果会带 `undefined`，写代码需显式处理。
 - 别加注释里的英文/emoji；保持现有中文注释风格。
 
@@ -92,9 +98,10 @@ npm run open-session -- -email you@example.com   # 打开真实浏览器调试�
 - 两个 git remote：`origin` = `chenfuxu920/Microsoft-Rewards-Script`（本 fork），`upstream` = `TheNetsky/Microsoft-Rewards-Script`。
 - 同步上游流程见 `更新同步原项目.txt`：`git fetch upstream && git merge upstream/v3 --allow-unrelated-histories`（历史上有过冲突解决，合并需谨慎）。
 
-## `.trae/` 中文 skills 框架
+## `.opencode/` 与 `.trae/` 中文 skills 框架
 
-`.trae/rules/superpowers-zh.md` 标记 `alwaysApply: true`，定义了 20 个 skills（brainstorming、TDD、systematic-debugging、verification-before-completion、chinese-* 系列）位于 `.trae/skills/<name>/SKILL.md`。这是 Trae IDE 的配置；OpenCode 会话可参考其**工作流约定**（设计先于编码、测试先于实现、验证先于完成），但不要误以为 OpenCode 会自动加载这些 skill。chinese-* skills 仅在用户显式 `/chinese-*` 时才用。
+- `.opencode/skills/` 包含 OpenCode 自定义 skills（brainstorming、chinese-code-review、systematic-debugging 等），由 `using-superpowers` 机制发现加载。
+- `.trae/rules/superpowers-zh.md` 标记 `alwaysApply: true`，定义了面向 Trae IDE 的 20 个 skills。OpenCode 会话可参考其**工作流约定**（设计先于编码、测试先于实现、验证先于完成），但不要误以为 OpenCode 会自动加载这些 skill。chinese-* skills 仅在用户显式 `/chinese-*` 时才用。
 
 ## 其它易踩点
 
