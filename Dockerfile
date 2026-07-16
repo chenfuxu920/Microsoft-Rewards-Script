@@ -15,7 +15,8 @@ RUN sed -i 's/deb.debian.org/mirrors.ustc.edu.cn/g' /etc/apt/sources.list \
     && npm config set progress false
 
 ENV PLAYWRIGHT_BROWSERS_PATH=/usr/src/microsoft-rewards-script/pw-browsers \
-    PATCHRIGHT_BROWSERS_PATH=/usr/src/microsoft-rewards-script/pw-browsers
+    PATCHRIGHT_BROWSERS_PATH=/usr/src/microsoft-rewards-script/pw-browsers \
+    PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright
 
 # Copy package files
 COPY package.json package-lock.json tsconfig.json ./
@@ -96,14 +97,22 @@ COPY --from=builder /usr/src/microsoft-rewards-script/package*.json ./
 COPY --from=builder /usr/src/microsoft-rewards-script/node_modules ./node_modules
 COPY --from=builder /usr/src/microsoft-rewards-script/pw-browsers ./pw-browsers
 
-# Copy runtime scripts with proper permissions from the start
-COPY --chmod=755 scripts/docker/run_daily.sh ./scripts/docker/run_daily.sh
-COPY --chmod=755 scripts/docker/run_daily_cron.sh ./scripts/docker/run_daily_cron.sh
-COPY --chmod=755 scripts/docker/log-forwarder.sh ./scripts/docker/log-forwarder.sh
-COPY --chmod=755 scripts/docker/memory_monitor.sh ./scripts/docker/memory_monitor.sh
-COPY --chmod=755 scripts/docker/cleanup-processes.sh ./scripts/docker/cleanup-processes.sh
-COPY --chmod=644 src/crontab.template /etc/cron.d/microsoft-rewards-cron.template
-COPY --chmod=755 entrypoint.sh /usr/local/bin/entrypoint.sh
+# Copy runtime scripts
+COPY scripts/docker/run_daily.sh ./scripts/docker/run_daily.sh
+COPY scripts/docker/run_daily_cron.sh ./scripts/docker/run_daily_cron.sh
+COPY scripts/docker/log-forwarder.sh ./scripts/docker/log-forwarder.sh
+COPY scripts/docker/memory_monitor.sh ./scripts/docker/memory_monitor.sh
+COPY scripts/docker/cleanup-processes.sh ./scripts/docker/cleanup-processes.sh
+COPY src/crontab.template /etc/cron.d/microsoft-rewards-cron.template
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod 755 \
+    ./scripts/docker/run_daily.sh \
+    ./scripts/docker/run_daily_cron.sh \
+    ./scripts/docker/log-forwarder.sh \
+    ./scripts/docker/memory_monitor.sh \
+    ./scripts/docker/cleanup-processes.sh \
+    /usr/local/bin/entrypoint.sh \
+    && chmod 644 /etc/cron.d/microsoft-rewards-cron.template
 
 # Entrypoint handles TZ, initial run toggle, cron templating & launch
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
