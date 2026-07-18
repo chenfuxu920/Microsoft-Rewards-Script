@@ -31,8 +31,11 @@ rm -rf /tmp/playwright_chromiumdev_profile-* 2>/dev/null || true
 rm -rf /tmp/.org.chromium.Chromium.* 2>/dev/null || true
 
 # 5. 验证清理效果
-remaining_chrome=$(pgrep -f 'chrome-headless-shell' | wc -l || echo "0")
-remaining_node=$(pgrep -f 'node.*dist/index.js' | wc -l || echo "0")
+# 注意：不能写 `|| echo "0"`，否则在 set -o pipefail 下 pgrep 无匹配（退出1）时，
+# wc 已输出 "0"，echo 再追加 "0"，拼接成 "0\n0"，导致下方 [ -gt ] 整数比较报错。
+# 用 `|| true` 即可：wc 始终输出计数，true 不产生输出且保证退出码 0。
+remaining_chrome=$(pgrep -f 'chrome-headless-shell' | wc -l || true)
+remaining_node=$(pgrep -f 'node.*dist/index.js' | wc -l || true)
 
 log "清理完成: Chrome进程=${remaining_chrome}, Node进程=${remaining_node}"
 
