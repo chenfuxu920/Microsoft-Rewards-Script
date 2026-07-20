@@ -299,13 +299,6 @@ export class ClaimDashboardPoints {
             )
         }
 
-        // 方法 3: 使用配置的默认值
-        const configDeploymentId = this.bot.config.claimPoints?.deploymentId
-        if (configDeploymentId) {
-            logger.debug(isMobile, 'CLAIM-DASHBOARD', `使用配置的部署 ID: ${configDeploymentId}`)
-            return configDeploymentId
-        }
-
         return ''
     }
 

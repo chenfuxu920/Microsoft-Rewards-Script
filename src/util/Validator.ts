@@ -93,9 +93,6 @@ export const ConfigSchema = z.object({
         doContinuousSearch: z.boolean(),
         doClaimDashboardPoints: z.boolean()
     }),
-    claimPoints: z.object({
-        deploymentId: z.string()
-    }),
     searchOnBingLocalQueries: z.boolean(),
     globalTimeout: NumberOrString,
     searchSettings: z.object({

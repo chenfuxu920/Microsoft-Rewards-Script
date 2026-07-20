@@ -17,9 +17,6 @@
         "doContinuousSearch": false,
         "doClaimDashboardPoints": false
     },
-    "claimPoints": {
-        "deploymentId": ""
-    },
     "searchOnBingLocalQueries": false,
     "globalTimeout": "50sec",
     "searchSettings": {

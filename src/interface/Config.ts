@@ -5,7 +5,6 @@ export interface Config {
     clusters: number
     errorDiagnostics: boolean
     workers: ConfigWorkers
-    claimPoints: ConfigClaimPoints
     searchOnBingLocalQueries: boolean
     globalTimeout: number | string
     searchSettings: ConfigSearchSettings
@@ -65,11 +64,6 @@ export interface ConfigWorkers {
     doReadToEarn: boolean
     doContinuousSearch: boolean
     doClaimDashboardPoints: boolean
-}
-
-export interface ConfigClaimPoints {
-    /** 部署版本 ID —— 从页面 response header 或 script 标签的 dpl 参数提取，留空则自动检测 */
-    deploymentId: string
 }
 
 export interface ConfigContinuousSearch {
