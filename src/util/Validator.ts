@@ -94,7 +94,6 @@ export const ConfigSchema = z.object({
         doClaimDashboardPoints: z.boolean()
     }),
     claimPoints: z.object({
-        nextActionHash: z.string(),
         deploymentId: z.string()
     }),
     searchOnBingLocalQueries: z.boolean(),

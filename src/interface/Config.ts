@@ -68,8 +68,6 @@ export interface ConfigWorkers {
 }
 
 export interface ConfigClaimPoints {
-    /** Next.js Server Action hash —— 从 HAR 抓包中提取，随网页部署版本变化 */
-    nextActionHash: string
     /** 部署版本 ID —— 从页面 response header 或 script 标签的 dpl 参数提取，留空则自动检测 */
     deploymentId: string
 }

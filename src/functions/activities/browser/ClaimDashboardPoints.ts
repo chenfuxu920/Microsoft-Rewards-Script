@@ -55,7 +55,7 @@ export class ClaimDashboardPoints {
     constructor(bot: MicrosoftRewardsBot, page: Page) {
         this.bot = bot
         this.page = page
-        this.nextActionHash = bot.config.claimPoints?.nextActionHash ?? '00cf5ba7699f0e920ffcff223f9e48fea78fd49784'
+        this.nextActionHash = '00cf5ba7699f0e920ffcff223f9e48fea78fd49784'
         this.deploymentId = ''
     }
 
@@ -141,7 +141,7 @@ export class ClaimDashboardPoints {
                 logger.debug(
                     isMobile,
                     'CLAIM-DASHBOARD',
-                    `未从JS提取到 action hash，使用配置值: ${this.nextActionHash.slice(0, 20)}...`
+                    `                    未从JS提取到 action hash，使用硬编码默认值: ${this.nextActionHash.slice(0, 20)}...`
                 )
             }
 
