@@ -45,13 +45,11 @@ class Browser {
         '--disable-default-extensions', // 禁用默认扩展
         '--disable-translate', // 禁用翻译
         '--disable-sync', // 禁用同步
-        '--disable-background-networking', // 禁用后台网络
         '--disable-background-timer-throttling', // 禁用后台定时器节流
         '--disable-backgrounding-occluded-window', // 禁用遮挡窗口后台化
         '--disable-renderer-backgrounding', // 禁用渲染器后台化
         '--disable-component-extensions-with-background-pages', // 禁用带后台页面的组件扩展
         '--metrics-recording-only', // 仅记录指标不上报
-        '--no-zygote', // 禁用zygote进程，减少子进程数
         '--lang=zh-CN'
     ] as const
 

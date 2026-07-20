@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import cluster, { Worker } from 'cluster'
-import { spawn, spawnSync } from 'child_process'
+import { spawn } from 'child_process'
 import type { BrowserContext, Cookie, Page } from 'patchright'
 import pkg from '../package.json'
 
@@ -65,20 +65,15 @@ async function flushAllWebhooks(timeoutMs = 5000): Promise<void> {
     resetNtfyQueue()
 }
 
-// 同步强制清理浏览器进程，确保 pkill 真正执行完毕后再继续
+// 异步强制清理残留浏览器进程，不阻塞进程退出
 // 覆盖 patchright 不同版本可能使用的进程名（chrome-headless-shell / chromium / chrome）
+// 仅在主进程调用：worker 退出时只关闭自己的 context，不能杀全局进程，否则多 worker 并发下会误杀其他 worker 的浏览器
 function forceKillBrowsers(): void {
     try {
-        // 先尝试优雅终止（给进程保存数据的时间）
-        spawnSync('pkill', ['-TERM', '-f', 'chrome-headless-shell|chromium|chrome'], {
+        spawn('pkill', ['-9', '-f', 'chrome-headless-shell|chromium|chrome'], {
             stdio: 'ignore',
-            timeout: 5000
-        })
-        // 再强制杀掉未响应的进程
-        spawnSync('pkill', ['-9', '-f', 'chrome-headless-shell|chromium|chrome'], {
-            stdio: 'ignore',
-            timeout: 5000
-        })
+            detached: true
+        }).unref()
     } catch {}
 }
 
@@ -116,7 +111,11 @@ async function cleanupAllBrowsers(): Promise<void> {
     // 给所有关闭操作 15 秒超时，避免某个 context.close() 卡住导致进程无法退出
     await Promise.race([Promise.allSettled(closePromises), new Promise<void>(resolve => setTimeout(resolve, 15000))])
     activeBrowserContexts.clear()
-    forceKillBrowsers()
+    // 仅主进程执行全局进程清理，worker 退出时只关闭自己的 context
+    // 否则多 worker 并发下任一 worker 退出会 pkill 全局，误杀其他正在运行的 worker 的浏览器
+    if (cluster.isPrimary) {
+        forceKillBrowsers()
+    }
 }
 
 interface UserData {
