@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import cluster, { Worker } from 'cluster'
-import { spawn } from 'child_process'
+import { spawn, spawnSync } from 'child_process'
 import type { BrowserContext, Cookie, Page } from 'patchright'
 import pkg from '../package.json'
 
@@ -65,12 +65,20 @@ async function flushAllWebhooks(timeoutMs = 5000): Promise<void> {
     resetNtfyQueue()
 }
 
+// 同步强制清理浏览器进程，确保 pkill 真正执行完毕后再继续
+// 覆盖 patchright 不同版本可能使用的进程名（chrome-headless-shell / chromium / chrome）
 function forceKillBrowsers(): void {
     try {
-        spawn('pkill', ['-f', 'chrome-headless-shell'], {
+        // 先尝试优雅终止（给进程保存数据的时间）
+        spawnSync('pkill', ['-TERM', '-f', 'chrome-headless-shell|chromium|chrome'], {
             stdio: 'ignore',
-            detached: true
-        }).unref()
+            timeout: 5000
+        })
+        // 再强制杀掉未响应的进程
+        spawnSync('pkill', ['-9', '-f', 'chrome-headless-shell|chromium|chrome'], {
+            stdio: 'ignore',
+            timeout: 5000
+        })
     } catch {}
 }
 
@@ -88,22 +96,25 @@ async function cleanupAllBrowsers(): Promise<void> {
     const closePromises: Promise<void>[] = []
     for (const context of activeBrowserContexts) {
         closePromises.push(
-            context
-                .close()
-                .catch((err: any) => {
+            (async () => {
+                try {
+                    await context.close()
+                } catch (err: any) {
                     console.error('Failed to close browser context:', err)
-                })
-                .then(() => {
+                }
+                try {
                     const browser = (context as any).browser?.()
                     if (browser) {
-                        return browser.close().catch((err: any) => {
-                            console.error('Failed to close browser:', err)
-                        })
+                        await browser.close()
                     }
-                })
+                } catch (err: any) {
+                    console.error('Failed to close browser:', err)
+                }
+            })()
         )
     }
-    await Promise.allSettled(closePromises)
+    // 给所有关闭操作 15 秒超时，避免某个 context.close() 卡住导致进程无法退出
+    await Promise.race([Promise.allSettled(closePromises), new Promise<void>(resolve => setTimeout(resolve, 15000))])
     activeBrowserContexts.clear()
     forceKillBrowsers()
 }
@@ -280,6 +291,7 @@ export class MicrosoftRewardsBot {
                     'green'
                 )
 
+                await cleanupAllBrowsers()
                 await flushAllWebhooks()
 
                 process.exit(hadWorkerFailure ? 1 : 0)
@@ -310,6 +322,7 @@ export class MicrosoftRewardsBot {
                     process.send({ __stats: stats })
                 }
 
+                await cleanupAllBrowsers()
                 await flushAllWebhooks()
                 process.exit(0)
             } catch (error) {
@@ -319,6 +332,7 @@ export class MicrosoftRewardsBot {
                     `工作进程任务崩溃: ${error instanceof Error ? error.message : String(error)}`
                 )
 
+                await cleanupAllBrowsers()
                 await flushAllWebhooks()
                 process.exit(1)
             }
@@ -415,6 +429,7 @@ export class MicrosoftRewardsBot {
                 'green'
             )
 
+            await cleanupAllBrowsers()
             await flushAllWebhooks()
             process.exit(0)
         }

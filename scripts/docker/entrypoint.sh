@@ -367,6 +367,13 @@ else
     echo "警告: 在 /etc/cron.d/microsoft-rewards-cron.template 找不到 Cron 模板"
 fi
 
+# 启动内存监控（可选，ENABLE_MEMORY_MONITOR=true 时启用）
+if [ "${ENABLE_MEMORY_MONITOR:-false}" = "true" ]; then
+    echo "[entrypoint] 启动内存监控 (阈值: ${MAX_MEMORY_PERCENT:-85}%, 间隔: ${CHECK_INTERVAL:-300}秒)"
+    nohup /usr/src/microsoft-rewards-script/scripts/docker/memory_monitor.sh > /dev/null 2>&1 &
+    echo "[entrypoint] 内存监控已启动 (PID: $!)"
+fi
+
 # 启动应用
 echo "正在启动 Microsoft Rewards 脚本..."
 exec "$@"

@@ -34,7 +34,10 @@ while true; do
         log "清理后内存使用率: ${NEW_MEM_PERCENT}%"
         
         if [ "$NEW_MEM_PERCENT" -gt "$MAX_MEMORY_PERCENT" ]; then
-            log "内存使用率仍然过高，建议重启容器"
+            log "内存使用率仍然过高 (${NEW_MEM_PERCENT}%)，重启容器以释放内存..."
+            sync
+            # 向 PID 1 发送 SIGTERM，触发容器停止并由 docker restart 策略自动重启
+            kill -TERM 1 2>/dev/null || true
         fi
     else
         log "内存使用率正常: ${MEM_PERCENT}%"

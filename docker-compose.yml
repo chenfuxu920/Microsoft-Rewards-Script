@@ -21,8 +21,8 @@ services:
             SKIP_RANDOM_SLEEP: 'false'
             # 内存优化配置
             NODE_OPTIONS: '--max-old-space-size=3072 --expose-gc'
-            # 内存监控（可选，启用后会定期检查内存使用）
-            ENABLE_MEMORY_MONITOR: 'false'
+            # 内存监控（启用后定期检查内存，超阈值会重启容器释放内存）
+            ENABLE_MEMORY_MONITOR: 'true'
             MAX_MEMORY_PERCENT: '85'
             CHECK_INTERVAL: '300'
             # 超时配置（小时）

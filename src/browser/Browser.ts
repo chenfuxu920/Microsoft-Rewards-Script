@@ -38,6 +38,20 @@ class Browser {
         '--disable-blink-features=Attestation', // 禁用Blink特性认证
         '--disable-features=WebAuthentication,PasswordManagerOnboarding,PasswordManager,EnablePasswordsAccountStorage,Passkeys,WebAuthenticationProxy,U2F', // 禁用特定功能
         '--disable-save-password-bubble', // 禁用保存密码提示
+        // 内存优化参数（无头模式不需要这些功能，可显著降低内存占用）
+        '--disable-gpu', // 禁用GPU加速（无头模式不需要）
+        '--disable-dev-shm-usage', // 避免/dev/shm写满，改用/tmp
+        '--disable-extensions', // 禁用扩展
+        '--disable-default-extensions', // 禁用默认扩展
+        '--disable-translate', // 禁用翻译
+        '--disable-sync', // 禁用同步
+        '--disable-background-networking', // 禁用后台网络
+        '--disable-background-timer-throttling', // 禁用后台定时器节流
+        '--disable-backgrounding-occluded-window', // 禁用遮挡窗口后台化
+        '--disable-renderer-backgrounding', // 禁用渲染器后台化
+        '--disable-component-extensions-with-background-pages', // 禁用带后台页面的组件扩展
+        '--metrics-recording-only', // 仅记录指标不上报
+        '--no-zygote', // 禁用zygote进程，减少子进程数
         '--lang=zh-CN'
     ] as const
 

@@ -12,12 +12,12 @@ log "开始清理残留进程..."
 
 # 1. 优雅关闭浏览器进程（给进程时间保存数据）
 log "优雅关闭浏览器进程..."
-pkill -TERM -f 'chrome-headless-shell' 2>/dev/null || true
+pkill -TERM -f 'chrome-headless-shell|chromium|chrome' 2>/dev/null || true
 sleep 3
 
 # 2. 强制终止未响应的浏览器进程
 log "强制终止残留浏览器进程..."
-pkill -9 -f 'chrome-headless-shell' 2>/dev/null || true
+pkill -9 -f 'chrome-headless-shell|chromium|chrome' 2>/dev/null || true
 sleep 2
 
 # 3. 清理残留的 Node.js 工作进程
@@ -34,7 +34,7 @@ rm -rf /tmp/.org.chromium.Chromium.* 2>/dev/null || true
 # 注意：不能写 `|| echo "0"`，否则在 set -o pipefail 下 pgrep 无匹配（退出1）时，
 # wc 已输出 "0"，echo 再追加 "0"，拼接成 "0\n0"，导致下方 [ -gt ] 整数比较报错。
 # 用 `|| true` 即可：wc 始终输出计数，true 不产生输出且保证退出码 0。
-remaining_chrome=$(pgrep -f 'chrome-headless-shell' | wc -l || true)
+remaining_chrome=$(pgrep -f 'chrome-headless-shell|chromium|chrome' | wc -l || true)
 remaining_node=$(pgrep -f 'node.*dist/index.js' | wc -l || true)
 
 log "清理完成: Chrome进程=${remaining_chrome}, Node进程=${remaining_node}"
@@ -44,7 +44,7 @@ if [ "$remaining_chrome" -gt 0 ] || [ "$remaining_node" -gt 0 ]; then
     log "警告: 仍有残留进程"
     if [ "$remaining_chrome" -gt 0 ]; then
         log "Chrome进程列表:"
-        ps aux | grep 'chrome-headless-shell' | grep -v grep || true
+        ps aux | grep -E 'chrome-headless-shell|chromium|chrome' | grep -v grep || true
     fi
     if [ "$remaining_node" -gt 0 ]; then
         log "Node进程列表:"
