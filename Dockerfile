@@ -5,9 +5,10 @@ FROM node:24-bullseye-slim AS builder
 
 WORKDIR /usr/src/microsoft-rewards-script
 
-# 配置 apt 镜像源为 USTC
-RUN sed -i 's/deb.debian.org/mirrors.ustc.edu.cn/g' /etc/apt/sources.list \
-    && sed -i 's/security.debian.org/mirrors.ustc.edu.cn/g' /etc/apt/sources.list \
+# Debian 11 (bullseye) 已于 2026-08 结束 LTS 支持，官方 security 仓库归档：
+# bullseye-security 索引中的包版本已从 pool 移除，直接安装会 404，故固定到 EOL 前的 snapshot 归档源。
+RUN printf 'deb http://snapshot.debian.org/archive/debian/20260824T000000Z bullseye main\ndeb http://snapshot.debian.org/archive/debian-security/20260824T000000Z bullseye-security main\ndeb http://snapshot.debian.org/archive/debian/20260824T000000Z bullseye-updates main\n' > /etc/apt/sources.list \
+    && printf 'Acquire::Check-Valid-Until "false";\nAcquire::Retries "3";\n' > /etc/apt/apt.conf.d/99snapshot \
     && npm config set registry https://registry.npmmirror.com/ \
     && npm config set fetch-retries 10 \
     && npm config set fetch-retry-mintimeout 60000 \
@@ -54,8 +55,10 @@ ENV NODE_ENV=production \
     NODE_OPTIONS="--max-old-space-size=3072 --expose-gc"
 
 # Install minimal system libraries required for Chromium headless to run
-RUN sed -i 's/deb.debian.org/mirrors.ustc.edu.cn/g' /etc/apt/sources.list \
-    && sed -i 's/security.debian.org/mirrors.ustc.edu.cn/g' /etc/apt/sources.list \
+# Debian 11 (bullseye) 已于 2026-08 结束 LTS 支持，官方 security 仓库归档：
+# bullseye-security 索引中的包版本已从 pool 移除，直接安装会 404，故固定到 EOL 前的 snapshot 归档源。
+RUN printf 'deb http://snapshot.debian.org/archive/debian/20260824T000000Z bullseye main\ndeb http://snapshot.debian.org/archive/debian-security/20260824T000000Z bullseye-security main\ndeb http://snapshot.debian.org/archive/debian/20260824T000000Z bullseye-updates main\n' > /etc/apt/sources.list \
+    && printf 'Acquire::Check-Valid-Until "false";\nAcquire::Retries "3";\n' > /etc/apt/apt.conf.d/99snapshot \
     && apt-get update && apt-get install -y --no-install-recommends --fix-missing \
     cron \
     procps \

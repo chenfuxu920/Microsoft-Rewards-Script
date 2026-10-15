@@ -121,7 +121,8 @@ export class UrlReward extends Workers {
             // 构建搜索请求
             const cookieHeader = this.bot.browser.func.buildCookieHeader(
                 this.bot.isMobile ? this.bot.cookies.mobile : this.bot.cookies.desktop,
-                ['bing.com', 'live.com', 'microsoftonline.com']
+                ['bing.com', 'live.com', 'microsoftonline.com'],
+                'cn.bing.com'
             )
 
             // 从destinationUrl中提取必要的参数
@@ -438,7 +439,8 @@ export class UrlReward extends Workers {
 
         const cookieHeader = this.bot.browser.func.buildCookieHeader(
             this.bot.isMobile ? this.bot.cookies.mobile : this.bot.cookies.desktop,
-            ['bing.com', 'live.com', 'microsoftonline.com']
+            ['bing.com', 'live.com', 'microsoftonline.com'],
+            'rewards.bing.com'
         )
 
         const formData = new URLSearchParams({

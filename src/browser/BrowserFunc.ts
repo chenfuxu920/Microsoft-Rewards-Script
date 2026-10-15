@@ -30,11 +30,11 @@ export default class BrowserFunc {
                 method: 'GET',
                 headers: {
                     ...(this.bot.fingerprint?.headers ?? {}),
-                    Cookie: this.buildCookieHeader(this.bot.cookies.mobile, [
-                        'bing.com',
-                        'live.com',
-                        'microsoftonline.com'
-                    ]),
+                    Cookie: this.buildCookieHeader(
+                        this.bot.cookies.mobile,
+                        ['bing.com', 'live.com', 'microsoftonline.com'],
+                        'rewards.bing.com'
+                    ),
                     Referer: 'https://rewards.bing.com/',
                     Origin: 'https://rewards.bing.com'
                 },
@@ -58,7 +58,11 @@ export default class BrowserFunc {
                     method: 'GET',
                     headers: {
                         ...(this.bot.fingerprint?.headers ?? {}),
-                        Cookie: this.buildCookieHeader(this.bot.cookies.mobile),
+                        Cookie: this.buildCookieHeader(
+                            this.bot.cookies.mobile,
+                            undefined,
+                            new URL(this.bot.config.baseURL).hostname
+                        ),
                         Referer: 'https://rewards.bing.com/',
                         Origin: 'https://rewards.bing.com'
                     },
@@ -345,16 +349,31 @@ export default class BrowserFunc {
         }
     }
 
-    buildCookieHeader(cookies: Cookie[], allowedDomains?: string[]): string {
+    buildCookieHeader(cookies: Cookie[], allowedDomains?: string[], targetHost?: string): string {
+        // 允许的 cookie 域：未显式指定时限定为微软相关域，避免把第三方站点的 cookie 一并发出
+        const domains =
+            allowedDomains && allowedDomains.length > 0
+                ? allowedDomains
+                : ['bing.com', 'live.com', 'microsoftonline.com']
+        const host = (targetHost ?? '').toLowerCase()
+
         return [
             ...new Map(
                 cookies
                     .filter(c => {
-                        if (!allowedDomains || allowedDomains.length === 0) return true
-                        return (
-                            typeof c.domain === 'string' &&
-                            allowedDomains.some(d => c.domain.toLowerCase().endsWith(d.toLowerCase()))
-                        )
+                        if (typeof c.domain !== 'string') return false
+
+                        const cookieDomain = c.domain.replace(/^\./, '').toLowerCase()
+                        const allowed = domains.some(d => {
+                            const domain = d.replace(/^\./, '').toLowerCase()
+                            return cookieDomain === domain || cookieDomain.endsWith(`.${domain}`)
+                        })
+                        if (!allowed) return false
+
+                        // 无目标主机时保持原有行为；有目标主机时按浏览器语义匹配，否则跨域
+                        // cookie 会把请求头撑到几十 KB，被服务器以 400 Bad Request 拒绝
+                        if (!host) return true
+                        return host === cookieDomain || host.endsWith(`.${cookieDomain}`)
                     })
                     .map(c => [c.name, c])
             ).values()

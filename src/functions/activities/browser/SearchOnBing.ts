@@ -35,7 +35,8 @@ export class SearchOnBing extends Workers {
         try {
             this.cookieHeader = this.bot.browser.func.buildCookieHeader(
                 this.bot.isMobile ? this.bot.cookies.mobile : this.bot.cookies.desktop,
-                ['bing.com', 'live.com', 'microsoftonline.com']
+                ['bing.com', 'live.com', 'microsoftonline.com'],
+                'rewards.bing.com'
             )
 
             const fingerprintHeaders = { ...this.bot.fingerprint.headers }
