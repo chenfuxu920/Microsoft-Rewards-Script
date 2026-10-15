@@ -29,3 +29,4 @@ logs/
 *.har
 *.html
 memory.text
+src/accounts.disabled.json
