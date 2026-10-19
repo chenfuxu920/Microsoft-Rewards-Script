@@ -55,7 +55,11 @@ export class ClaimDashboardPoints {
     constructor(bot: MicrosoftRewardsBot, page: Page) {
         this.bot = bot
         this.page = page
-        this.nextActionHash = '00cf5ba7699f0e920ffcff223f9e48fea78fd49784'
+        // 不使用硬编码的 action hash：微软每次重新部署都会更换 Server Action ID，
+        // 固定值早已失效（实测返回 404 "Server action not found." / 409 "Server Action unavailable."）。
+        // 仅当运行时从 JS chunk 动态提取到有效 hash 时才走 Server Action，
+        // 否则直接走页面点击回退方案，避免每次白发一个注定失败的请求。
+        this.nextActionHash = ''
         this.deploymentId = ''
     }
 
@@ -384,10 +388,18 @@ export class ClaimDashboardPoints {
         const isMobile = this.bot.isMobile
         const logger = this.bot.logger
 
+        // 抽屉确认按钮文案随界面语言变化，不能只匹配中文：
+        //   zh-hans: "领取积分"  |  en: "Claim points"
+        // 优先在 dialog 作用域内查找，避免命中抽屉外的同名元素。
         const drawerCtaSelectors = [
+            '[role="dialog"] button:has-text("领取积分")',
+            '[role="dialog"] button:has-text("Claim points")',
             'button:has-text("领取积分")',
+            'button:has-text("Claim points")',
             '[role="button"]:has-text("领取积分")',
-            '[data-react-aria-pressable="true"]:has-text("领取积分")'
+            '[role="button"]:has-text("Claim points")',
+            '[data-react-aria-pressable="true"]:has-text("领取积分")',
+            '[data-react-aria-pressable="true"]:has-text("Claim points")'
         ]
 
         // 等待抽屉动画渲染
@@ -442,9 +454,10 @@ export class ClaimDashboardPoints {
                 headers['x-deployment-id'] = this.deploymentId
             }
 
-            // 如果 nextActionHash 为空且 deploymentId 也为空，则不可能成功
-            if (!this.nextActionHash && !this.deploymentId) {
-                logger.warn(isMobile, 'CLAIM-DASHBOARD', '缺少 Server Action 所需的必要参数，无法发送请求')
+            // 没有 action hash 就不可能成功：deploymentId 只用于请求头，无法替代 next-action。
+            // 此时直接跳过，交由页面点击回退方案处理。
+            if (!this.nextActionHash) {
+                logger.debug(isMobile, 'CLAIM-DASHBOARD', '未获取到有效的 Server Action hash，跳过 Server Action 路径')
                 return false
             }
 
