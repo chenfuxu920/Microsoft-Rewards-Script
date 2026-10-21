@@ -25,10 +25,29 @@ const BUTTON_SELECTORS = [
 ]
 
 /**
+ * 「激活」按钮选择器。
+ *
+ * 打卡任务（Duolingo 这类）未激活时，页面上唯一可用的是「立即激活」，
+ * 其余子任务全部 aria-disabled="true"。必须先点掉它，14 天计时才开始。
+ *
+ * 注意不能靠 href 识别：激活后同一个按钮只是把文案改成「继续搜索」，
+ * href 仍是同一个 urlreward 包装（id=..._Activate&channel=urlreward&hash=...），
+ * 用 href 子串匹配会把「继续搜索」也一起命中，导致循环反复点它。
+ * 因此这里只按无障碍标签的语义匹配，并且同时覆盖中英文界面。
+ *
+ * 激活的完成条件是访问该 redirect URL（channel=urlreward），
+ * clickButton() 点击后本来就会 goto(button.href)，所以只要把它选中就能自动激活。
+ */
+const ACTIVATE_SELECTOR = '[aria-label*="激活"][href], [aria-label*="Activate"][href]'
+
+/**
  * 统计任务页里"看起来像任务按钮"的元素总数（含禁用态），
  * 用于区分「任务真的做完了」和「按钮存在但全部不可用」。
+ *
+ * 不能用 `[href*="form="]`：激活按钮的 href 被 URL 编码，会被漏计，
+ * 导致「还有激活按钮没点」被误判成「全部不可用」。
  */
-const CENSUS_SELECTOR = '[href*="form="]'
+const CENSUS_SELECTOR = '[aria-label][href]'
 
 export class PunchCardExecutor {
     private bot: MicrosoftRewardsBot
@@ -55,12 +74,26 @@ export class PunchCardExecutor {
         // 跳转到任务页面
         await this.navigateToQuest(questUrl)
 
-        // 循环处理每个可点击按钮，每次只点一个然后刷新页面状态
+        // 循环处理每个可点击按钮，每次只点一个然后刷新页面状态。
+        // 已点过的 href 会被排除：像「立即激活→继续搜索」这种按钮点击后 href 不变，
+        // 不记录的话会在同一轮里被反复点击，把 maxAttempts 耗尽。
+        const clickedHrefs = new Set<string>()
         let maxAttempts = 10
         while (maxAttempts-- > 0) {
-            const buttons = await this.getTaskButtons()
+            const candidates = await this.getTaskButtons()
+            const buttons = candidates.filter(button => !clickedHrefs.has(button.href))
 
             if (buttons.length === 0) {
+                if (candidates.length > 0) {
+                    // 剩下的候选本轮都点过了，等下一次运行再处理
+                    this.bot.logger.info(
+                        this.bot.isMobile,
+                        'PUNCHCARD',
+                        `本轮已点击 ${clickedHrefs.size} 个按钮，没有新的可点按钮 | title=${title}`
+                    )
+                    break
+                }
+
                 const total = await this.countTaskLikeButtons()
 
                 if (total > 0) {
@@ -79,6 +112,8 @@ export class PunchCardExecutor {
             const button = buttons[0]!
             const text = button.ariaLabel.split(',')[0]?.trim() ?? ''
             this.bot.logger.info(this.bot.isMobile, 'PUNCHCARD', `找到 ${buttons.length} 个可点击按钮, 正在处理: ${text}`)
+
+            clickedHrefs.add(button.href)
 
             await this.clickButton(button)
 
@@ -107,6 +142,14 @@ export class PunchCardExecutor {
      * - 排除导航栏与社交/法务链接
      */
     private async getTaskButtons(): Promise<PunchCardButton[]> {
+        // 激活按钮必须最先处理：未激活时其余子任务全是 aria-disabled，
+        // 而它的 href 被 URL 编码，下面任何一层 form= 选择器都命中不到。
+        const activateButtons = await this.getActivateButtons()
+        if (activateButtons.length > 0) {
+            this.bot.logger.info(this.bot.isMobile, 'PUNCHCARD', `检测到未激活的打卡任务，优先点击激活按钮`)
+            return activateButtons
+        }
+
         for (const selector of BUTTON_SELECTORS) {
             const buttons = await this.page.$$eval(selector, elements => {
                 return elements
@@ -146,6 +189,34 @@ export class PunchCardExecutor {
         }
 
         return []
+    }
+
+    /**
+     * 找出待点击的「立即激活」按钮。
+     *
+     * 只返回可用（未 disabled）的激活按钮，且最多 1 个：
+     * 一个打卡任务只会有一次激活，重复点击没有意义。
+     */
+    private async getActivateButtons(): Promise<PunchCardButton[]> {
+        return await this.page
+            .$$eval(ACTIVATE_SELECTOR, elements => {
+                return elements
+                    .filter(el => {
+                        const href = el.getAttribute('href') || ''
+                        const ariaLabel = (el.getAttribute('aria-label') || '').trim()
+                        if (!href || !ariaLabel) return false
+                        if (el.getAttribute('aria-disabled') === 'true') return false
+                        if (el.getAttribute('data-disabled') === 'true') return false
+                        if (el.closest('header, nav, footer')) return false
+                        return true
+                    })
+                    .slice(0, 1)
+                    .map(el => ({
+                        ariaLabel: (el.getAttribute('aria-label') || '').trim(),
+                        href: el.getAttribute('href') || ''
+                    }))
+            })
+            .catch(() => [] as PunchCardButton[])
     }
 
     /**
