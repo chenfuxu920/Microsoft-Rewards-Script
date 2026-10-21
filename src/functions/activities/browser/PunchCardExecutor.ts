@@ -7,6 +7,29 @@ interface PunchCardButton {
     href: string
 }
 
+/**
+ * quest 页面任务按钮的候选选择器，按可靠度从高到低排列。
+ *
+ * 微软 2026 年重写了 rewards 任务页：按钮从 `a.circular` 改成 Tailwind 风格，
+ * 并且多数渲染为 <SPAN role="link" href="...">（href 是 React 写在非标准标签上的属性），
+ * 所以旧的 `a[class*="circular"]` 已经彻底匹配不到任何按钮。
+ *
+ * 另外不同活动页面的结构并不统一（有的带 role="link"，有的没有），
+ * 因此这里用分层降级而不是押注单一选择器：命中即返回，并在日志里记录是哪一层生效。
+ */
+const BUTTON_SELECTORS = [
+    '[role="link"][aria-label][href]', // 语义最稳，但部分活动页不提供 role
+    '[href*="rnoreward=1"]', // Rewards 业务参数，跨活动稳定
+    '[href*="form="][aria-label]', // 追踪参数 + 无障碍标签，跨页面命中最广
+    'a[class*="circular"]' // 旧结构兜底
+]
+
+/**
+ * 统计任务页里"看起来像任务按钮"的元素总数（含禁用态），
+ * 用于区分「任务真的做完了」和「按钮存在但全部不可用」。
+ */
+const CENSUS_SELECTOR = '[href*="form="]'
+
 export class PunchCardExecutor {
     private bot: MicrosoftRewardsBot
     private page: Page
@@ -38,7 +61,18 @@ export class PunchCardExecutor {
             const buttons = await this.getTaskButtons()
 
             if (buttons.length === 0) {
-                this.bot.logger.info(this.bot.isMobile, 'PUNCHCARD', `没有更多可点击的按钮 | title=${title}`)
+                const total = await this.countTaskLikeButtons()
+
+                if (total > 0) {
+                    // 按钮存在但全部不可用：通常是未激活、未到解锁时间或活动已过期
+                    this.bot.logger.warn(
+                        this.bot.isMobile,
+                        'PUNCHCARD',
+                        `检测到 ${total} 个任务按钮但全部不可用（未激活/未解锁/活动已过期）| title=${title}`
+                    )
+                } else {
+                    this.bot.logger.info(this.bot.isMobile, 'PUNCHCARD', `没有更多可点击的按钮 | title=${title}`)
+                }
                 break
             }
 
@@ -57,40 +91,80 @@ export class PunchCardExecutor {
     }
 
     private async navigateToQuest(questUrl: string): Promise<void> {
-        await this.page.goto(questUrl)
+        await this.page.goto(questUrl, { waitUntil: 'domcontentloaded', timeout: 30000 }).catch(() => {})
         await this.page.waitForLoadState('networkidle').catch(() => {})
         await this.page.waitForTimeout(2000)
     }
 
     /**
      * 获取任务按钮列表
-     * 
-     * 按钮在 quest 页面上渲染为 Fluent UI Link 组件：
-     * - className 包含 "circular" (来自 RSC 数据: className: "circular w-fit")
-     * - href 指向 bing.com/search 且包含 rnoreward=1
-     * - 有 aria-label 属性
-     * - 不可点击的按钮有 aria-disabled="true" 或 cursor-not-allowed 类
-     * - 已完成的任务不会渲染为按钮（直接从 DOM 中消失）
-     * 
-     * 注意: offerId/isCompleted/isLocked 是 React 组件 props，不会渲染到 DOM 上
+     *
+     * 任务按钮在 quest 页面上的实际特征（2026-10 实测）：
+     * - 多数为 <SPAN role="link" href="...">（href 不在 <a> 上，必须用 getAttribute 读取）
+     * - 部分页面没有 role="link"，需要降级到 href 参数匹配
+     * - 禁用态同时写 aria-disabled="true" 与 data-disabled="true"，不要再依赖 class
+     * - 已完成的任务直接从 DOM 消失
+     * - 排除导航栏与社交/法务链接
      */
     private async getTaskButtons(): Promise<PunchCardButton[]> {
-        const buttons = await this.page.$$eval('a[class*="circular"]', elements => {
-            return elements
-                .filter(el => {
-                    const href = (el as HTMLAnchorElement).href || ''
-                    const ariaDisabled = el.getAttribute('aria-disabled') === 'true'
-                    const hasCursorNotAllowed = el.classList.contains('cursor-not-allowed')
-                    // 只保留有目标链接且未被禁用的按钮
-                    return href.includes('bing.com/search') && !ariaDisabled && !hasCursorNotAllowed
-                })
-                .map(el => ({
-                    ariaLabel: el.getAttribute('aria-label') || '',
-                    href: (el as HTMLAnchorElement).href || ''
-                }))
-        })
+        for (const selector of BUTTON_SELECTORS) {
+            const buttons = await this.page.$$eval(selector, elements => {
+                return elements
+                    .filter(el => {
+                        const href = el.getAttribute('href') || ''
+                        const ariaLabel = (el.getAttribute('aria-label') || '').trim()
 
-        return buttons
+                        if (!href || !ariaLabel) return false
+                        // 禁用态：优先读语义属性，class 仅作兜底
+                        if (el.getAttribute('aria-disabled') === 'true') return false
+                        if (el.getAttribute('data-disabled') === 'true') return false
+                        if (/cursor-not-allowed/.test(String(el.className || ''))) return false
+                        // 排除社交 / 法务 / 导航类链接
+                        if (
+                            /x\.com|twitter\.com|facebook\.com|instagram\.com|support\.microsoft\.com|privacy\.microsoft\.com|servicesagreement/i.test(
+                                href
+                            )
+                        ) {
+                            return false
+                        }
+                        if (el.closest('header, nav, footer')) return false
+
+                        return true
+                    })
+                    .map(el => ({
+                        ariaLabel: (el.getAttribute('aria-label') || '').trim(),
+                        href: el.getAttribute('href') || ''
+                    }))
+            })
+
+            if (buttons.length > 0) {
+                this.bot.logger.debug(this.bot.isMobile, 'PUNCHCARD', `选择器命中 ${buttons.length} 个按钮: ${selector}`)
+                return buttons
+            }
+
+            this.bot.logger.debug(this.bot.isMobile, 'PUNCHCARD', `选择器未命中: ${selector}`)
+        }
+
+        return []
+    }
+
+    /**
+     * 统计任务页里任务型按钮的总数（含禁用态）。
+     * 用于把「任务已完成，按钮消失」与「按钮还在但点不动」区分开，避免静默跳过。
+     */
+    private async countTaskLikeButtons(): Promise<number> {
+        return await this.page
+            .$$eval(CENSUS_SELECTOR, elements => {
+                return elements.filter(el => {
+                    const href = el.getAttribute('href') || ''
+                    const ariaLabel = (el.getAttribute('aria-label') || '').trim()
+                    if (!href || !ariaLabel) return false
+                    if (/x\.com|twitter\.com|facebook\.com|instagram\.com|support\.microsoft\.com/i.test(href)) return false
+                    if (el.closest('header, nav, footer')) return false
+                    return true
+                }).length
+            })
+            .catch(() => 0)
     }
 
     private async clickButton(button: PunchCardButton): Promise<void> {
@@ -104,37 +178,38 @@ export class PunchCardExecutor {
 
         if (!button.href) return
 
-        // 通过 href 精确定位按钮
-        const locator = this.page.locator(`a[href="${button.href}"]`).first()
+        // 通过 href 精确定位按钮。这里不限定标签名：任务按钮可能是 <a>，也可能是 <span role="link">
+        const escapedHref = button.href.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+        const locator = this.page.locator(`[href="${escapedHref}"]`).first()
 
-        if (!await locator.isVisible()) {
+        if (!(await locator.isVisible().catch(() => false))) {
             this.bot.logger.warn(this.bot.isMobile, 'PUNCHCARD-CLICK', `按钮不可见: ${buttonText}`)
             return
         }
 
-        // 使用 JavaScript 点击 + preventDefault 阻止 <a> 的默认导航
+        // 使用 JavaScript 点击 + preventDefault 阻止默认导航
         // 这样 React 的 onClick (RSC Server Action POST) 能正常触发并完成
         try {
             // 监听 RSC Server Action POST 响应
-            const rscResponsePromise = this.page.waitForResponse(
-                resp => {
-                    const url = resp.url()
-                    return url.includes('/earn') && resp.request().method() === 'POST'
-                        && resp.request().headers()['next-action'] !== undefined
-                },
-                { timeout: 8000 }
-            ).catch(() => null)
+            const rscResponsePromise = this.page
+                .waitForResponse(
+                    resp => {
+                        const url = resp.url()
+                        return (
+                            url.includes('/earn') &&
+                            resp.request().method() === 'POST' &&
+                            resp.request().headers()['next-action'] !== undefined
+                        )
+                    },
+                    { timeout: 8000 }
+                )
+                .catch(() => null)
 
-            // 通过 JS 点击按钮，阻止默认导航
-            await this.page.evaluate((href) => {
-                const link = document.querySelector(`a[href="${href}"]`) as HTMLAnchorElement
-                if (link) {
-                    link.addEventListener('click', (e) => {
-                        e.preventDefault()
-                    }, { once: true, capture: true })
-                    link.click()
-                }
-            }, button.href)
+            // 在元素自身上执行点击，屏蔽 <a> 的默认跳转（元素可能是 span，因此不能用 querySelector('a[href=...]')）
+            await locator.evaluate(el => {
+                el.addEventListener('click', e => e.preventDefault(), { once: true, capture: true })
+                ;(el as HTMLElement).click()
+            })
 
             // 等待 RSC POST 完成
             const rscResponse = await rscResponsePromise
@@ -158,7 +233,9 @@ export class PunchCardExecutor {
             try {
                 const currentUrl = this.page.url()
 
-                const newPagePromise = this.page.context().waitForEvent('page', { timeout: 5000 })
+                const newPagePromise = this.page
+                    .context()
+                    .waitForEvent('page', { timeout: 5000 })
                     .then(p => ({ type: 'newPage' as const, page: p }))
                     .catch(() => ({ type: 'timeout' as const, page: null as Page | null }))
 
@@ -179,7 +256,9 @@ export class PunchCardExecutor {
                 // 点击或导航失败
             } finally {
                 if (newPage && !newPage.isClosed()) {
-                    try { await newPage.close() } catch {}
+                    try {
+                        await newPage.close()
+                    } catch {}
                 }
             }
 
@@ -190,8 +269,7 @@ export class PunchCardExecutor {
         if (button.href) {
             this.bot.logger.debug(this.bot.isMobile, 'PUNCHCARD-CLICK', `访问目标页面: ${button.href.substring(0, 80)}...`)
             try {
-                await this.page.goto(button.href)
-                await this.page.waitForLoadState('domcontentloaded').catch(() => {})
+                await this.page.goto(button.href, { waitUntil: 'domcontentloaded', timeout: 30000 })
                 await this.page.waitForTimeout(3000)
             } catch {
                 // 导航失败不影响任务完成
