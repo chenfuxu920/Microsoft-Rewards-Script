@@ -384,7 +384,8 @@ export class Search extends Workers {
                 }
 
                 await this.bot.utils.wait(
-                    this.bot.utils.randomDelay(
+                    // 长尾加权：15% 概率额外叠加 0.5-2.5 倍区间，避免固定节奏
+                    this.bot.utils.longTailDelay(
                         this.bot.config.searchSettings.searchDelay.min,
                         this.bot.config.searchSettings.searchDelay.max
                     )

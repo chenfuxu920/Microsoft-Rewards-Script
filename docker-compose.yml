@@ -19,6 +19,9 @@ services:
             PLAYWRIGHT_BROWSERS_PATH: '/usr/src/microsoft-rewards-script/pw-browsers'
             PATCHRIGHT_BROWSERS_PATH: '/usr/src/microsoft-rewards-script/pw-browsers'
             SKIP_RANDOM_SLEEP: 'false'
+            # 整轮执行的随机延迟窗口（分钟）：把两轮的启动时间摊开，避免每天固定时刻
+            MIN_SLEEP_MINUTES: '5'
+            MAX_SLEEP_MINUTES: '180'
             # 内存优化配置
             NODE_OPTIONS: '--max-old-space-size=3072 --expose-gc'
             # 内存监控（启用后定期检查内存，超阈值会重启容器释放内存）

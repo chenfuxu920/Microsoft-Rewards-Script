@@ -214,4 +214,25 @@ export default class Util {
         const maxMs = typeof max === 'number' ? max : this.stringToNumber(max)
         return Math.floor(this.randomNumber(minMs, maxMs))
     }
+
+    /**
+     * 长尾延迟：绝大多数取值落在 [min, max]，少量概率额外叠加一段尾延迟。
+     * 真实用户的搜索/阅读间隔并不均匀，固定区间会呈现出定时器特征。
+     */
+    longTailDelay(
+        min: string | number,
+        max: string | number,
+        tailChance = 0.15,
+        tailFactor = 2.5
+    ): number {
+        const base = this.randomDelay(min, max)
+        if (Math.random() >= tailChance) {
+            return base
+        }
+        const minMs = typeof min === 'number' ? min : this.stringToNumber(min)
+        const maxMs = typeof max === 'number' ? max : this.stringToNumber(max)
+        const span = Math.max(maxMs - minMs, 60000)
+        const extra = this.randomNumber(Math.floor(span * 0.5), Math.floor(span * tailFactor))
+        return base + extra
+    }
 }

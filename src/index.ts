@@ -413,6 +413,19 @@ export class MicrosoftRewardsBot {
                     error: error instanceof Error ? error.message : String(error)
                 })
             }
+
+            // 账号之间拉开随机间隔：避免同一 IP 上短时间内连续处理多个账号
+            const remainingAccounts = accounts.length - accounts.indexOf(account) - 1
+            if (remainingAccounts > 0) {
+                const gapMs = this.utils.longTailDelay('14min', '32min', 0.25, 1.8)
+                const gapMinutes = (gapMs / 1000 / 60).toFixed(1)
+                this.logger.info(
+                    'main',
+                    'ACCOUNT-GAP',
+                    `账号间隔 ${gapMinutes} 分钟后再处理下一个账户 | 剩余 ${remainingAccounts} 个`
+                )
+                await this.utils.wait(gapMs)
+            }
         }
 
         if (this.config.clusters <= 1 && cluster.isPrimary) {
