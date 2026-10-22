@@ -22,9 +22,17 @@ export class Search extends Workers {
     public async doSearch(data: DashboardData, page: Page, isMobile: boolean): Promise<number> {
         const startBalance = Number(this.bot.userData.currentPoints ?? 0)
 
-        this.bot.logger.info(isMobile, 'SEARCH-BING', `开始必应搜索 | currentPoints=${startBalance}`)
-
         let totalGainedPoints = 0
+
+        // 强度档位的搜索积分上限（0 = 不限，搜满为止）。降强度档位靠这里限制搜索次数。
+        const pointCap = isMobile ? this.bot.activeSearchCap.mobile : this.bot.activeSearchCap.desktop
+        const capReached = () => pointCap > 0 && totalGainedPoints >= pointCap
+
+        this.bot.logger.info(
+            isMobile,
+            'SEARCH-BING',
+            `开始必应搜索 | currentPoints=${startBalance} | 积分上限=${pointCap === 0 ? '不限' : pointCap} | 档位=${this.bot.activeIntensity}`
+        )
 
         try {
             let searchCounters: Counters = await this.bot.browser.func.getSearchPoints()
@@ -129,6 +137,15 @@ export class Search extends Workers {
 
                 missingPointsTotal = newMissingPointsTotal
 
+                if (pointCap > 0 && totalGainedPoints >= pointCap) {
+                    this.bot.logger.info(
+                        isMobile,
+                        'SEARCH-BING',
+                        `已达到强度档位搜索积分上限 ${pointCap}，提前结束搜索（降强度） | 本次获得=${totalGainedPoints}`
+                    )
+                    break
+                }
+
                 if (missingPointsTotal === 0) {
                     this.bot.logger.info(isMobile, 'SEARCH-BING', '已获得所有必需的搜索积分，停止主搜索循环')
                     break
@@ -181,7 +198,7 @@ export class Search extends Workers {
                 let stagnantLoop = 0
                 const stagnantLoopMax = 5
 
-                while (missingPointsTotal > 0) {
+                while (missingPointsTotal > 0 && !capReached()) {
                     // 如果配置了 queryEngines 则使用配置，否则使用默认逻辑
                     const configuredEngines = this.bot.config.searchSettings.queryEngines
                     const extra = await queryCore.queryManager({
@@ -237,6 +254,15 @@ export class Search extends Workers {
                         }
 
                         missingPointsTotal = newMissingPointsTotal
+
+                        if (pointCap > 0 && totalGainedPoints >= pointCap) {
+                            this.bot.logger.info(
+                                isMobile,
+                                'SEARCH-BING-EXTRA',
+                                `已达到强度档位搜索积分上限 ${pointCap}，提前结束额外搜索（降强度） | 本次获得=${totalGainedPoints}`
+                            )
+                            break
+                        }
 
                         if (missingPointsTotal === 0) {
                             this.bot.logger.info(

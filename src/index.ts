@@ -1,6 +1,8 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import cluster, { Worker } from 'cluster'
 import { spawn } from 'child_process'
+import fs from 'fs'
+import path from 'path'
 import type { BrowserContext, Cookie, Page } from 'patchright'
 import pkg from '../package.json'
 
@@ -148,6 +150,11 @@ export class MicrosoftRewardsBot {
 
     private pointsCanCollect = 0
 
+    /** 当前账号的搜索积分上限（0 = 不限），由 intensity 档位决定 */
+    public activeSearchCap: { mobile: number; desktop: number } = { mobile: 0, desktop: 0 }
+    /** 当前账号的强度档位名 */
+    public activeIntensity: string = 'normal'
+
     private activeWorkers: number
     private exitedWorkers: number[]
     private browserFactory: Browser = new Browser(this)
@@ -192,6 +199,88 @@ export class MicrosoftRewardsBot {
 
     async initialize(): Promise<void> {
         this.accounts = loadAccounts()
+    }
+
+    /** 解析账号的强度档位名：账号显式声明 > config.defaultIntensity > normal */
+    private resolveIntensityName(account: Account): string {
+        return account.intensity || this.config.defaultIntensity || 'normal'
+    }
+
+    /**
+     * 应用账号强度档位：按档位覆盖搜索间隔 / 阅读间隔 / workers 开关，并设置搜索积分上限。
+     * runTasks 是串行处理账号的，所以这里直接改进程内的 config 副本；调用方必须执行返回的恢复函数。
+     */
+    private applyIntensity(account: Account): () => void {
+        const name = this.resolveIntensityName(account)
+        const profile = this.config.intensityProfiles?.[name]
+
+        this.activeIntensity = name
+        this.activeSearchCap = {
+            mobile: profile?.searchCap?.mobile ?? 0,
+            desktop: profile?.searchCap?.desktop ?? 0
+        }
+
+        if (!profile) {
+            if (name !== 'normal') {
+                this.logger.warn(
+                    'main',
+                    'INTENSITY',
+                    `未知强度档位 "${name}"（config.intensityProfiles 中未定义），按 normal 处理 | ${account.email}`
+                )
+            }
+            return () => {}
+        }
+
+        const savedSearchDelay = this.config.searchSettings.searchDelay
+        const savedReadDelay = this.config.searchSettings.readDelay
+        const savedWorkers = { ...this.config.workers }
+
+        if (profile.searchDelay) this.config.searchSettings.searchDelay = profile.searchDelay
+        if (profile.readDelay) this.config.searchSettings.readDelay = profile.readDelay
+        if (profile.workers) Object.assign(this.config.workers, profile.workers)
+
+        this.logger.info(
+            'main',
+            'INTENSITY',
+            `应用强度档位 "${name}" | ${account.email} | 搜索上限 移动端=${this.activeSearchCap.mobile} 桌面端=${this.activeSearchCap.desktop} | 搜索间隔 ${JSON.stringify(this.config.searchSettings.searchDelay)} | 每日一轮=${profile.oncePerDay === true}`
+        )
+
+        return () => {
+            this.config.searchSettings.searchDelay = savedSearchDelay
+            this.config.searchSettings.readDelay = savedReadDelay
+            Object.assign(this.config.workers, savedWorkers)
+            this.activeIntensity = 'normal'
+            this.activeSearchCap = { mobile: 0, desktop: 0 }
+        }
+    }
+
+    /** 低强度档位"每日最多一轮"的标记文件路径（logs/ 已挂载到宿主机） */
+    private intensityMarkerPath(email: string): string {
+        const now = new Date()
+        const day = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+        return path.join(__dirname, '../logs/intensity', day, `${email}.done`)
+    }
+
+    private isDailyRunDone(email: string): boolean {
+        try {
+            return fs.existsSync(this.intensityMarkerPath(email))
+        } catch {
+            return false
+        }
+    }
+
+    private markDailyRunDone(email: string): void {
+        try {
+            const marker = this.intensityMarkerPath(email)
+            fs.mkdirSync(path.dirname(marker), { recursive: true })
+            fs.writeFileSync(marker, `${new Date().toISOString()}\n`)
+        } catch (error) {
+            this.logger.warn(
+                'main',
+                'INTENSITY',
+                `写入每日标记失败: ${error instanceof Error ? error.message : String(error)}`
+            )
+        }
     }
 
     async run(): Promise<void> {
@@ -354,6 +443,21 @@ export class MicrosoftRewardsBot {
             const accountEmail = account.email
             this.userData.userName = this.utils.getEmailUsername(accountEmail)
 
+            const intensityName = this.resolveIntensityName(account)
+            const intensityProfile = this.config.intensityProfiles?.[intensityName]
+
+            // 低强度档位：每天最多执行一次（07:00 与 20:00 两轮 cron 只吃一轮，降低行为密度）
+            if (intensityProfile?.oncePerDay && this.isDailyRunDone(accountEmail)) {
+                this.logger.info(
+                    'main',
+                    'INTENSITY-SKIP',
+                    `低强度账号今日已执行过，跳过本轮 | ${accountEmail} | 档位=${intensityName}`
+                )
+                continue
+            }
+
+            let accountFlowOk = false
+
             try {
                 this.logger.info('main', 'ACCOUNT-START', `开始处理账户: ${accountEmail} | 地区: ${account.geoLocale}`)
 
@@ -373,6 +477,8 @@ export class MicrosoftRewardsBot {
                 const durationSeconds = ((Date.now() - accountStartTime) / 1000).toFixed(1)
 
                 if (result) {
+                    accountFlowOk = true
+
                     const collectedPoints = result.collectedPoints ?? 0
                     const accountInitialPoints = result.initialPoints ?? 0
                     const accountFinalPoints = accountInitialPoints + collectedPoints
@@ -422,10 +528,22 @@ export class MicrosoftRewardsBot {
                 })
             }
 
+            // 只有成功跑完才记「今日已跑」；失败则保留 20:00 轮补跑一次的机会
+            if (intensityProfile?.oncePerDay && accountFlowOk) {
+                this.markDailyRunDone(accountEmail)
+            } else if (intensityProfile?.oncePerDay) {
+                this.logger.warn(
+                    'main',
+                    'INTENSITY',
+                    `低强度账号本轮未成功完成，保留 20:00 轮补跑机会 | ${accountEmail}`
+                )
+            }
+
             // 账号之间拉开随机间隔：避免同一 IP 上短时间内连续处理多个账号
             const remainingAccounts = accounts.length - accounts.indexOf(account) - 1
             if (remainingAccounts > 0) {
-                const gapMs = this.utils.longTailDelay('14min', '32min', 0.25, 1.8)
+                const gapConfig = intensityProfile?.accountGap ?? { min: '14min', max: '32min' }
+                const gapMs = this.utils.longTailDelay(gapConfig.min, gapConfig.max, 0.25, 1.8)
                 const gapMinutes = (gapMs / 1000 / 60).toFixed(1)
                 this.logger.info(
                     'main',
@@ -460,6 +578,9 @@ export class MicrosoftRewardsBot {
     async Main(account: Account): Promise<{ initialPoints: number; collectedPoints: number }> {
         const accountEmail = account.email
         this.logger.info('main', 'FLOW', `开始会话 ${accountEmail}`)
+
+        // 按账号应用强度档位（搜索限量/间隔拉长/活动开关），会话结束后恢复全局配置
+        const restoreIntensity = this.applyIntensity(account)
 
         let mobileSession: BrowserSession | null = null
         let mobileContextClosed = false
@@ -625,6 +746,7 @@ export class MicrosoftRewardsBot {
                     })
                 } catch {}
             }
+            restoreIntensity()
         }
     }
 }

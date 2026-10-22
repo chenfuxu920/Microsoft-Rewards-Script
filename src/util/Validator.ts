@@ -20,6 +20,35 @@ const DelaySchema = z.object({
     max: NumberOrString
 })
 
+const WorkersSchema = z.object({
+    doDailySet: z.boolean(),
+    doSpecialPromotions: z.boolean(),
+    doMorePromotions: z.boolean(),
+    doPunchCards: z.boolean(),
+    doAppPromotions: z.boolean(),
+    doDesktopSearch: z.boolean(),
+    doMobileSearch: z.boolean(),
+    doDailyCheckIn: z.boolean(),
+    doReadToEarn: z.boolean(),
+    doContinuousSearch: z.boolean(),
+    doClaimDashboardPoints: z.boolean()
+})
+
+// 强度档位：允许只覆盖部分字段
+const IntensityProfileSchema = z.object({
+    searchCap: z
+        .object({
+            mobile: z.number().int().nonnegative(),
+            desktop: z.number().int().nonnegative()
+        })
+        .optional(),
+    searchDelay: DelaySchema.optional(),
+    readDelay: DelaySchema.optional(),
+    accountGap: DelaySchema.optional(),
+    oncePerDay: z.boolean().optional(),
+    workers: WorkersSchema.partial().optional()
+})
+
 const ContinuousSearchSchema = z.object({
     enabled: z.boolean(),
     depthMin: z.number().int().min(1).max(10),
@@ -80,19 +109,7 @@ export const ConfigSchema = z.object({
     headless: z.boolean(),
     clusters: z.number().int().nonnegative(),
     errorDiagnostics: z.boolean(),
-    workers: z.object({
-        doDailySet: z.boolean(),
-        doSpecialPromotions: z.boolean(),
-        doMorePromotions: z.boolean(),
-        doPunchCards: z.boolean(),
-        doAppPromotions: z.boolean(),
-        doDesktopSearch: z.boolean(),
-        doMobileSearch: z.boolean(),
-        doDailyCheckIn: z.boolean(),
-        doReadToEarn: z.boolean(),
-        doContinuousSearch: z.boolean(),
-        doClaimDashboardPoints: z.boolean()
-    }),
+    workers: WorkersSchema,
     searchOnBingLocalQueries: z.boolean(),
     globalTimeout: NumberOrString,
     searchSettings: z.object({
@@ -110,7 +127,9 @@ export const ConfigSchema = z.object({
         queryEngine: z.boolean()
     }),
     consoleLogFilter: LogFilterSchema,
-    webhook: WebhookSchema
+    webhook: WebhookSchema,
+    defaultIntensity: z.string().optional(),
+    intensityProfiles: z.record(z.string(), IntensityProfileSchema).optional()
 })
 
 // Account
@@ -131,7 +150,8 @@ export const AccountSchema = z.object({
     saveFingerprint: z.object({
         mobile: z.boolean(),
         desktop: z.boolean()
-    })
+    }),
+    intensity: z.string().optional()
 })
 
 export function validateConfig(data: unknown): Config {
