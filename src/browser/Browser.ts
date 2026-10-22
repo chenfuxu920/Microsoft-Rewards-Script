@@ -76,6 +76,11 @@ class Browser {
             // 启动浏览器
             browser = await rebrowser.chromium.launch({
                 headless: this.bot.config.headless, // 是否无头模式
+                // 使用完整版 Chromium 的 new headless 模式（channel: 'chromium'）。
+                // 默认的 chromium_headless_shell 会暴露三个可检测破绽：
+                //   navigator.plugins.length === 0、navigator.mimeTypes.length === 0、window.chrome === undefined
+                // 换成完整版后这三项分别为 5 / 2 / object，与真实 Edge/Chrome 一致。
+                channel: 'chromium',
                 ...(proxyConfig && { proxy: proxyConfig }), // 代理配置
                 args: [...Browser.BROWSER_ARGS] // 浏览器启动参数
             })

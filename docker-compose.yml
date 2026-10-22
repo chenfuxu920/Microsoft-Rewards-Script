@@ -15,7 +15,7 @@ services:
             TZ: 'Asia/Shanghai'
             NODE_ENV: 'production'
             CRON_SCHEDULE: '0 7,20 * * *'
-            RUN_ON_START: 'true'
+            RUN_ON_START: 'false'
             PLAYWRIGHT_BROWSERS_PATH: '/usr/src/microsoft-rewards-script/pw-browsers'
             PATCHRIGHT_BROWSERS_PATH: '/usr/src/microsoft-rewards-script/pw-browsers'
             SKIP_RANDOM_SLEEP: 'false'

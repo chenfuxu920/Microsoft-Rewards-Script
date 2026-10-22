@@ -27,7 +27,7 @@ RUN npm install --ignore-scripts --no-audit --no-fund --loglevel verbose
 
 # Install Chromium Headless Shell (before copying source to cache better)
 RUN mkdir -p /usr/src/microsoft-rewards-script/pw-browsers \
-    && npx patchright install --only-shell chromium \
+    && npx patchright install chromium \
     && rm -rf /root/.cache /tmp/* /var/tmp/*
 
 # Copy source and build

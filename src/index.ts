@@ -249,9 +249,17 @@ export class MicrosoftRewardsBot {
                 }
             })
 
-            // Startup delay for clusters due to resource usage
+            // 集群错峰：原来的固定 5 秒会让多个账号在同一 IP 上几乎同时上线，
+            // 这里改成长尾随机的分钟级间隔，既降低关联特征，也减少并发抢资源。
             if (accountChunks.indexOf(chunk) !== accountChunks.length - 1) {
-                await this.utils.wait(5000)
+                const staggerMs = this.utils.longTailDelay('14min', '32min', 0.25, 1.8)
+                const staggerMinutes = (staggerMs / 1000 / 60).toFixed(1)
+                void this.logger.info(
+                    'main',
+                    'CLUSTER-STAGGER',
+                    `集群错峰：${staggerMinutes} 分钟后启动下一个工作进程 | 剩余 ${accountChunks.length - 1 - accountChunks.indexOf(chunk)} 个`
+                )
+                await this.utils.wait(staggerMs)
             }
         }
 
